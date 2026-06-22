@@ -219,6 +219,203 @@
           }
         }
       }
+    },
+    "/api/v1/dashboard/health": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Health",
+        "operationId": "health_api_v1_dashboard_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardHealth"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/tree": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Tree",
+        "operationId": "tree_api_v1_dashboard_tree_get",
+        "parameters": [
+          {
+            "name": "max_depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 4,
+              "title": "Max Depth"
+            }
+          },
+          {
+            "name": "include_hidden",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Hidden"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreeNode"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/file": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Read File",
+        "operationId": "read_file_api_v1_dashboard_file_get",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Write File",
+        "operationId": "write_file_api_v1_dashboard_file_put",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/cascade/sync": {
+      "post": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Cascade Sync",
+        "operationId": "cascade_sync_api_v1_dashboard_cascade_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CascadeActionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/cascade/fix": {
+      "post": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Cascade Fix",
+        "operationId": "cascade_fix_api_v1_dashboard_cascade_fix_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CascadeActionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -244,6 +441,35 @@
           "status"
         ],
         "title": "AddResponseData"
+      },
+      "CascadeActionResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "processed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processed"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "CascadeActionResponse"
       },
       "ContentItemDTO": {
         "properties": {
@@ -335,6 +561,177 @@
         ],
         "title": "ContentItemDTO",
         "description": "Content piece (v1 API brief appendix A)."
+      },
+      "DashboardHealth": {
+        "properties": {
+          "memory_root": {
+            "type": "string",
+            "title": "Memory Root"
+          },
+          "memory_root_exists": {
+            "type": "boolean",
+            "title": "Memory Root Exists"
+          },
+          "sqlite_exists": {
+            "type": "boolean",
+            "title": "Sqlite Exists"
+          },
+          "lancedb_exists": {
+            "type": "boolean",
+            "title": "Lancedb Exists"
+          },
+          "markdown_files": {
+            "type": "integer",
+            "title": "Markdown Files"
+          },
+          "app_project_count": {
+            "type": "integer",
+            "title": "App Project Count"
+          },
+          "queue": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Queue"
+          },
+          "provider_chain": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Provider Chain"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "grok_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grok Model"
+          },
+          "codex_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codex Model"
+          },
+          "openai_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openai Model"
+          },
+          "embedding_provider": {
+            "type": "string",
+            "title": "Embedding Provider"
+          },
+          "embedding_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "memory_root",
+          "memory_root_exists",
+          "sqlite_exists",
+          "lancedb_exists",
+          "markdown_files",
+          "app_project_count",
+          "queue",
+          "provider_chain",
+          "model",
+          "grok_model",
+          "codex_model",
+          "openai_model",
+          "embedding_provider",
+          "embedding_model"
+        ],
+        "title": "DashboardHealth"
+      },
+      "FileResponse": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "modified_at": {
+            "type": "number",
+            "title": "Modified At"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "content",
+          "modified_at",
+          "size",
+          "editable"
+        ],
+        "title": "FileResponse"
+      },
+      "FileWriteRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Path"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "content"
+        ],
+        "title": "FileWriteRequest"
       },
       "FilterNode": {
         "properties": {
@@ -1516,6 +1913,69 @@
           "arguments"
         ],
         "title": "ToolFunctionDTO"
+      },
+      "TreeNode": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "file",
+              "dir"
+            ],
+            "title": "Type"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "modified_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified At"
+          },
+          "children": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TreeNode"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "type"
+        ],
+        "title": "TreeNode"
       },
       "UnprocessedMessageDTO": {
         "properties": {

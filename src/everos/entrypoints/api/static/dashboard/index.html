@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EverOS Memory Dashboard</title>
+    <link rel="stylesheet" href="/dashboard/styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">E</div>
+        <div>
+          <h1>EverOS</h1>
+          <p>Local Memory</p>
+        </div>
+      </div>
+      <nav>
+        <button class="nav-button active" data-view="overview">Overview</button>
+        <button class="nav-button" data-view="search">Search</button>
+        <button class="nav-button" data-view="files">Files</button>
+        <button class="nav-button" data-view="sync">Sync</button>
+      </nav>
+      <div class="sidebar-foot">
+        <span id="serverStatus" class="status-dot"></span>
+        <span id="serverStatusText">Checking</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section id="overview" class="view active">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Dashboard</p>
+            <h2>Memory Overview</h2>
+          </div>
+          <button id="refreshOverview" class="command">Refresh</button>
+        </header>
+
+        <div class="metric-grid">
+          <article class="metric">
+            <span>Markdown files</span>
+            <strong id="metricMarkdown">0</strong>
+          </article>
+          <article class="metric">
+            <span>Scopes</span>
+            <strong id="metricScopes">0</strong>
+          </article>
+          <article class="metric">
+            <span>Queue pending</span>
+            <strong id="metricPending">0</strong>
+          </article>
+          <article class="metric">
+            <span>Queue failed</span>
+            <strong id="metricFailed">0</strong>
+          </article>
+        </div>
+
+        <section class="panel">
+          <h3>Runtime</h3>
+          <dl class="details">
+            <dt>Memory root</dt>
+            <dd id="memoryRoot">-</dd>
+            <dt>SQLite</dt>
+            <dd id="sqliteStatus">-</dd>
+            <dt>LanceDB</dt>
+            <dd id="lancedbStatus">-</dd>
+            <dt>Provider chain</dt>
+            <dd id="providerChain">-</dd>
+            <dt>Models</dt>
+            <dd id="modelDetails">-</dd>
+            <dt>Embedding</dt>
+            <dd id="embeddingModel">-</dd>
+          </dl>
+        </section>
+      </section>
+
+      <section id="search" class="view">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Retrieval</p>
+            <h2>Memory Search</h2>
+          </div>
+        </header>
+
+        <form id="searchForm" class="search-bar">
+          <input id="searchQuery" type="search" placeholder="Search memories" />
+          <select id="searchOwnerType">
+            <option value="user">User</option>
+            <option value="agent">Agent</option>
+          </select>
+          <input id="searchOwnerId" value="lengxiaochu" />
+          <input id="searchProjectId" value="default" />
+          <select id="searchMethod">
+            <option value="keyword">keyword</option>
+            <option value="hybrid">hybrid</option>
+            <option value="vector">vector</option>
+            <option value="agentic">agentic</option>
+          </select>
+          <button class="command" type="submit">Search</button>
+        </form>
+
+        <div class="split">
+          <section class="panel result-list" id="searchResults"></section>
+          <section class="panel preview">
+            <h3>Preview</h3>
+            <pre id="searchPreview">Select a result.</pre>
+          </section>
+        </div>
+      </section>
+
+      <section id="files" class="view">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Source</p>
+            <h2>Markdown Explorer</h2>
+          </div>
+          <button id="refreshTree" class="command">Refresh</button>
+        </header>
+
+        <div class="split files-layout">
+          <section class="panel tree" id="fileTree"></section>
+          <section class="panel editor">
+            <div class="editor-head">
+              <span id="activeFile">No file selected</span>
+              <button id="saveFile" class="command secondary" disabled>Save</button>
+            </div>
+            <textarea id="fileEditor" spellcheck="false"></textarea>
+          </section>
+        </div>
+      </section>
+
+      <section id="sync" class="view">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Maintenance</p>
+            <h2>Sync & Index</h2>
+          </div>
+        </header>
+        <div class="actions">
+          <button id="runCascadeSync" class="command">Cascade Sync</button>
+          <button id="runCascadeFix" class="command secondary">Fix Retryable</button>
+        </div>
+        <section class="panel">
+          <h3>Output</h3>
+          <pre id="syncOutput">Ready.</pre>
+        </section>
+      </section>
+    </main>
+
+    <script src="/dashboard/app.js"></script>
+  </body>
+</html>

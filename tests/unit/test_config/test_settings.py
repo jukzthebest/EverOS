@@ -15,6 +15,7 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in list(__import__("os").environ):
         if key.startswith("EVEROS_"):
             monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("EVEROS_CONFIG_FILE", "/tmp/everos-test-missing-config.toml")
     load_settings.cache_clear()
 
 
@@ -124,6 +125,46 @@ def test_embedding_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     assert s.embedding.model == "intfloat/e5-large-v2"
     assert s.embedding.base_url == "http://localhost:8000/v1"
     assert s.embedding.batch_size == 32
+
+
+def test_llm_codex_oauth_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EVEROS_LLM__PROVIDER", "codex_oauth")
+    monkeypatch.setenv("EVEROS_LLM__MODEL", "gpt-5.5")
+    monkeypatch.setenv("EVEROS_LLM__AUTH_FILE", "~/.codex/auth.json")
+    monkeypatch.setenv("EVEROS_LLM__SERVICE_TIER", "priority")
+
+    s = Settings()
+
+    assert s.llm.provider == "codex_oauth"
+    assert s.llm.model == "gpt-5.5"
+    assert s.llm.auth_file == Path("~/.codex/auth.json")
+    assert s.llm.service_tier == "priority"
+
+
+def test_llm_provider_chain_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "EVEROS_LLM__PROVIDER_CHAIN",
+        '["grok_oauth","codex_oauth","openai"]',
+    )
+    monkeypatch.setenv("EVEROS_LLM__GROK_MODEL", "grok-build")
+    monkeypatch.setenv("EVEROS_LLM__CODEX_MODEL", "gpt-5.5")
+    monkeypatch.setenv("EVEROS_LLM__OPENAI_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("EVEROS_LLM__GROK_AUTH_FILE", "~/.grok/auth.json")
+    monkeypatch.setenv("EVEROS_LLM__CODEX_AUTH_FILE", "~/.codex/auth.json")
+    monkeypatch.setenv(
+        "EVEROS_LLM__GROK_BASE_URL",
+        "https://cli-chat-proxy.grok.com/v1",
+    )
+
+    s = Settings()
+
+    assert s.llm.provider_chain == ["grok_oauth", "codex_oauth", "openai"]
+    assert s.llm.grok_model == "grok-build"
+    assert s.llm.codex_model == "gpt-5.5"
+    assert s.llm.openai_model == "gpt-4o-mini"
+    assert s.llm.grok_auth_file == Path("~/.grok/auth.json")
+    assert s.llm.codex_auth_file == Path("~/.codex/auth.json")
+    assert s.llm.grok_base_url == "https://cli-chat-proxy.grok.com/v1"
 
 
 def test_rerank_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:

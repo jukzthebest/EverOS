@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""Fast local EverOS memory helper for agent rules and hooks.
+
+This script intentionally avoids importing ``everos`` for search/doctor paths.
+It talks to the already-running local EverOS API, so Codex can recall memory
+without paying Python package import + LanceDB setup costs on every query.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+DEFAULT_BASE_URL = os.environ.get("EVEROS_MEMORY_BASE_URL", "http://127.0.0.1:8000")
+DEFAULT_USER_ID = os.environ.get("EVEROS_MEMORY_USER_ID", "lengxiaochu")
+DEFAULT_AGENT_ID = os.environ.get("EVEROS_MEMORY_AGENT_ID", "codex")
+DEFAULT_APP_ID = os.environ.get("EVEROS_MEMORY_APP_ID", "codex")
+DEFAULT_PROJECTS = (
+    "CSPM",
+    "Yundun",
+    "Daily",
+    "AIDP",
+    "AgentWiki",
+    "Content",
+    "Misc",
+)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+@dataclass(frozen=True)
+class Hit:
+    kind: str
+    project_id: str
+    score: float | None
+    title: str
+    body: str
+    session_id: str | None
+    item_id: str
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="everos-memory")
+    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    doctor = subparsers.add_parser("doctor", help="Check the local EverOS API")
+    doctor.set_defaults(func=cmd_doctor)
+
+    search = subparsers.add_parser("search", help="Search local EverOS memory")
+    search.add_argument("query")
+    search.add_argument("--project", default="auto")
+    search.add_argument("--limit", type=int, default=3)
+    search.add_argument(
+        "--method",
+        default="keyword",
+        choices=("keyword", "hybrid", "vector"),
+    )
+    search.add_argument("--owner", default="both", choices=("user", "agent", "both"))
+    search.add_argument("--user-id", default=DEFAULT_USER_ID)
+    search.add_argument("--agent-id", default=DEFAULT_AGENT_ID)
+    search.add_argument("--app-id", default=DEFAULT_APP_ID)
+    search.add_argument("--json", action="store_true", help="Emit raw normalized JSON")
+    search.set_defaults(func=cmd_search)
+
+    ingest = subparsers.add_parser(
+        "import-codex",
+        help="Import stable Codex sessions through the EverOS CLI",
+    )
+    ingest.add_argument("extra", nargs=argparse.REMAINDER)
+    ingest.set_defaults(func=cmd_import_codex)
+
+    args = parser.parse_args(argv)
+    return int(args.func(args) or 0)
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    try:
+        data = request_json(args.base_url, "/api/v1/dashboard/health", timeout=1.5)
+    except RuntimeError as exc:
+        print(f"EverOS API unavailable: {exc}", file=sys.stderr)
+        return 2
+    print(f"base_url: {args.base_url.rstrip('/')}")
+    print(f"memory_root: {data.get('memory_root')}")
+    print(f"markdown_files: {data.get('markdown_files')}")
+    print(f"sqlite: {'present' if data.get('sqlite_exists') else 'missing'}")
+    print(f"lancedb: {'present' if data.get('lancedb_exists') else 'missing'}")
+    queue = data.get("queue") or {}
+    print(
+        "queue: "
+        f"pending={queue.get('pending')} failed={queue.get('failed_retryable')} "
+        f"lag={queue.get('lag')}"
+    )
+    print(f"embedding: {data.get('embedding_provider') or 'unknown'}")
+    return 0
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    projects = resolve_projects(args.project)
+    owners = ("user", "agent") if args.owner == "both" else (args.owner,)
+    limit = max(1, min(args.limit, 50))
+    recall_limit = max(limit, 5)
+    requests = [(project_id, owner) for project_id in projects for owner in owners]
+    hits: list[Hit] = []
+    with ThreadPoolExecutor(max_workers=min(8, len(requests) or 1)) as pool:
+        futures = [
+            pool.submit(
+                search_scope,
+                args.base_url,
+                args.query,
+                project_id,
+                owner,
+                args.user_id,
+                args.agent_id,
+                args.app_id,
+                args.method,
+                recall_limit,
+            )
+            for project_id, owner in requests
+        ]
+        for future in as_completed(futures):
+            try:
+                hits.extend(future.result())
+            except RuntimeError as exc:
+                print(f"warning: {exc}", file=sys.stderr)
+    hits.sort(
+        key=lambda hit: boosted_score(hit, args.query),
+        reverse=True,
+    )
+    hits = hits[:limit]
+    if args.json:
+        print(json.dumps([hit.__dict__ for hit in hits], ensure_ascii=False, indent=2))
+        return 0
+    print_hits(args.query, hits)
+    return 0 if hits else 1
+
+
+def cmd_import_codex(args: argparse.Namespace) -> int:
+    cmd = ["uv", "run", "everos", "import", "codex", *args.extra]
+    return subprocess.call(cmd, cwd=PROJECT_ROOT)
+
+
+def resolve_projects(value: str) -> tuple[str, ...]:
+    if value in {"", "auto", "all", "*"}:
+        return DEFAULT_PROJECTS
+    return tuple(part.strip() for part in value.split(",") if part.strip())
+
+
+def search_scope(
+    base_url: str,
+    query: str,
+    project_id: str,
+    owner: str,
+    user_id: str,
+    agent_id: str,
+    app_id: str,
+    method: str,
+    limit: int,
+) -> list[Hit]:
+    payload: dict[str, Any] = {
+        "app_id": app_id,
+        "project_id": project_id,
+        "query": query,
+        "method": method,
+        "top_k": limit,
+    }
+    if owner == "user":
+        payload["user_id"] = user_id
+    else:
+        payload["agent_id"] = agent_id
+    data = request_json(base_url, "/api/v1/memory/search", payload, timeout=4.0)
+    if "error" in data:
+        message = (data.get("error") or {}).get("message") or "unknown error"
+        raise RuntimeError(f"{project_id}/{owner}: {message}")
+    return normalize_hits(data.get("data") or {})
+
+
+def request_json(
+    base_url: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    timeout: float,
+) -> dict[str, Any]:
+    url = f"{base_url.rstrip('/')}{path}"
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers={"content-type": "application/json"},
+        method="GET" if payload is None else "POST",
+    )
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8")
+        except Exception:
+            detail = str(exc)
+        raise RuntimeError(detail) from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(str(exc)) from exc
+
+
+def normalize_hits(data: dict[str, Any]) -> list[Hit]:
+    hits: list[Hit] = []
+    for item in data.get("episodes") or []:
+        hits.append(
+            Hit(
+                kind="episode",
+                project_id=str(item.get("project_id") or ""),
+                score=as_score(item.get("score")),
+                title=str(item.get("subject") or item.get("summary") or item.get("id")),
+                body=str(item.get("episode") or item.get("summary") or ""),
+                session_id=maybe_str(item.get("session_id")),
+                item_id=str(item.get("id") or ""),
+            )
+        )
+    for item in data.get("agent_cases") or []:
+        hits.append(
+            Hit(
+                kind="agent_case",
+                project_id=str(item.get("project_id") or ""),
+                score=as_score(item.get("score")),
+                title=str(item.get("task_intent") or item.get("id")),
+                body=str(item.get("approach") or item.get("key_insight") or ""),
+                session_id=maybe_str(item.get("session_id")),
+                item_id=str(item.get("id") or ""),
+            )
+        )
+    for item in data.get("agent_skills") or []:
+        hits.append(
+            Hit(
+                kind="agent_skill",
+                project_id=str(item.get("project_id") or ""),
+                score=as_score(item.get("score")),
+                title=str(item.get("name") or item.get("id")),
+                body=str(item.get("description") or item.get("content") or ""),
+                session_id=None,
+                item_id=str(item.get("id") or ""),
+            )
+        )
+    return hits
+
+
+def as_score(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def maybe_str(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def print_hits(query: str, hits: list[Hit]) -> None:
+    print(f"EverOS memory hits for: {query}")
+    print("source=everos priority=primary")
+    if not hits:
+        print("No hits.")
+        return
+    for index, hit in enumerate(hits, 1):
+        score = "" if hit.score is None else f" score={hit.score:.3f}"
+        confidence = f" confidence={confidence_label(hit.score)}"
+        print(
+            f"{index}. [{hit.kind}][{hit.project_id}]{score}{confidence} "
+            f"{clip(hit.title, 120)}"
+        )
+        if hit.body:
+            print(f"   {clip(hit.body, 220)}")
+        suffix = f"   id={hit.item_id}"
+        if hit.session_id:
+            suffix += f" session={hit.session_id}"
+        print(suffix)
+
+
+def confidence_label(score: float | None) -> str:
+    if score is None:
+        return "unknown"
+    if score >= 8:
+        return "high"
+    if score >= 4:
+        return "medium"
+    return "low"
+
+
+def boosted_score(hit: Hit, query: str) -> float:
+    base = hit.score if hit.score is not None else 0.0
+    tokens = query_tokens(query)
+    if not tokens:
+        return base
+    title = hit.title.lower()
+    body = hit.body.lower()
+    boost = 0.0
+    for token in tokens:
+        if token in title:
+            boost += 2.0
+        if token in body:
+            boost += 0.5
+    return base + boost
+
+
+def query_tokens(query: str) -> list[str]:
+    return [token.lower() for token in query.split() if len(token.strip()) >= 2]
+
+
+def clip(text: str, limit: int) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1].rstrip() + "…"
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

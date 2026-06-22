@@ -7,6 +7,7 @@ Public surface:
 - :class:`EmbeddingError` — provider-side failure.
 - :class:`OpenAIEmbeddingProvider` — concrete provider for any
   OpenAI-protocol embeddings endpoint (DeepInfra, vLLM, OpenAI, …).
+- :class:`LocalHashEmbeddingProvider` — offline deterministic bootstrap provider.
 - :func:`build_embedding_provider` — settings-driven factory.
 
 External usage::
@@ -19,6 +20,9 @@ External usage::
 from .accessor import EmbeddingNotConfiguredError as EmbeddingNotConfiguredError
 from .accessor import get_embedder as get_embedder
 from .factory import build_embedding_provider as build_embedding_provider
+from .local_hash_provider import (
+    LocalHashEmbeddingProvider as LocalHashEmbeddingProvider,
+)
 from .openai_provider import OpenAIEmbeddingProvider as OpenAIEmbeddingProvider
 from .protocol import EmbeddingError as EmbeddingError
 from .protocol import EmbeddingProvider as EmbeddingProvider
@@ -27,6 +31,7 @@ __all__ = [
     "EmbeddingError",
     "EmbeddingNotConfiguredError",
     "EmbeddingProvider",
+    "LocalHashEmbeddingProvider",
     "OpenAIEmbeddingProvider",
     "build_embedding_provider",
     "get_embedder",

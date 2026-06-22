@@ -559,6 +559,7 @@ dependencies = [
     { name = "everalgo-user-memory" },
     { name = "fastapi" },
     { name = "greenlet" },
+    { name = "httpx" },
     { name = "jieba" },
     { name = "lancedb" },
     { name = "openai" },
@@ -574,6 +575,7 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
     { name = "watchdog" },
     { name = "watchfiles" },
+    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -608,6 +610,7 @@ requires-dist = [
     { name = "everalgo-user-memory", specifier = "==0.2.0" },
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "greenlet", specifier = ">=3.0" },
+    { name = "httpx", specifier = ">=0.28.0" },
     { name = "jieba", specifier = "==0.42.1" },
     { name = "lancedb", specifier = ">=0.13.0" },
     { name = "openai", specifier = ">=1.0.0" },
@@ -623,6 +626,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
     { name = "watchdog", specifier = ">=4.0.0" },
     { name = "watchfiles", specifier = ">=0.21.0" },
+    { name = "websockets", specifier = ">=14.0" },
 ]
 provides-extras = ["multimodal"]
 

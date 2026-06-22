@@ -18,6 +18,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 
 from everalgo.user_memory import ForesightExtractor
+from everalgo.user_memory.foresight import FORESIGHT_GENERATION_PROMPT
 
 from everos.component.llm import get_llm_client
 from everos.component.utils.datetime import from_timestamp, to_iso_format
@@ -28,6 +29,7 @@ from everos.infra.ome.decorator import offline_strategy
 from everos.infra.ome.triggers import Immediate
 from everos.infra.persistence.markdown import ForesightWriter
 from everos.memory.events import UserPipelineStarted
+from everos.memory.extract.language import localize_texts, memory_prompt
 from everos.memory.models import Foresight
 
 logger = get_logger(__name__)
@@ -52,12 +54,27 @@ async def extract_foresight(event: UserPipelineStarted, ctx: StrategyContext) ->
     # 1. List the user senders in this memcell.
     memcell = event.memcell
     sender_ids = sorted({m.sender_id for m in memcell.items if m.role == "user"})
-    extractor = ForesightExtractor(llm=get_llm_client()) if sender_ids else None
+    if not sender_ids:
+        logger.info(
+            "foresights_extracted",
+            memcell_id=event.memcell_id,
+            session_id=event.session_id,
+            count=0,
+            owner_ids=[],
+        )
+        return
 
     # 2. Run the LLM extractor once per sender (prompt is per-sender).
+    llm = get_llm_client()
+    extractor = ForesightExtractor(llm=llm)
     foresights: list[Foresight] = []
+    prompt = memory_prompt(FORESIGHT_GENERATION_PROMPT)
     for sid in sender_ids:
-        algo_foresights = await extractor.aextract(memcell, sender_id=sid)
+        algo_foresights = await extractor.aextract(
+            memcell,
+            sender_id=sid,
+            prompt=prompt,
+        )
         foresights.extend(
             Foresight.from_algo(
                 algo_fs,
@@ -66,6 +83,13 @@ async def extract_foresight(event: UserPipelineStarted, ctx: StrategyContext) ->
             )
             for algo_fs in algo_foresights
         )
+    localized = await localize_texts(
+        llm,
+        [text for fs in foresights for text in (fs.foresight, fs.evidence)],
+    )
+    for fs, index in zip(foresights, range(0, len(localized), 2), strict=True):
+        fs.foresight = localized[index]
+        fs.evidence = localized[index + 1]
 
     # 3. Group foresights by owner so each sender's full list lands in one
     #    batched write.

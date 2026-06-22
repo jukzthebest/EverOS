@@ -16,6 +16,9 @@ from everalgo.llm.protocols import LLMClient
 from everos.config import load_settings
 from everos.core.observability.logging import get_logger
 
+from .factory import build_llm_provider
+from .language_provider import LanguageLLMProvider
+
 logger = get_logger(__name__)
 
 
@@ -31,29 +34,30 @@ def get_llm_client() -> LLMClient:
     """Return the singleton algo LLM client.
 
     Raises:
-        LLMNotConfiguredError: When ``settings.llm.api_key`` or
-            ``settings.llm.base_url`` is unset.
+        LLMNotConfiguredError: When the selected provider is incomplete.
     """
     global _llm_client
     if _llm_client is not None:
         return _llm_client
 
     llm_cfg = load_settings().llm
-    api_key = (
-        llm_cfg.api_key.get_secret_value() if llm_cfg.api_key is not None else None
-    )
-    if not api_key or not llm_cfg.base_url:
+    try:
+        provider = build_llm_provider(llm_cfg)
+        _llm_client = (
+            LanguageLLMProvider(provider, llm_cfg.extraction_language)
+            if llm_cfg.extraction_language != "auto"
+            else provider
+        )
+    except ValueError as exc:
         raise LLMNotConfiguredError(
-            "LLM is required; set EVEROS_LLM__API_KEY + EVEROS_LLM__BASE_URL"
-        )
-    _llm_client = build_client(
-        LLMConfig(
-            model=llm_cfg.model,
-            api_key=api_key,
-            base_url=llm_cfg.base_url,
-        )
+            "LLM is required; configure [llm] for provider "
+            f"{llm_cfg.provider!r}: {exc}"
+        ) from exc
+    logger.info(
+        "llm_client_built",
+        model=llm_cfg.model,
+        provider=_provider_label(llm_cfg),
     )
-    logger.info("llm_client_built", model=llm_cfg.model)
     return _llm_client
 
 
@@ -87,3 +91,9 @@ def get_multimodal_llm_client() -> LLMClient:
     )
     logger.info("multimodal_llm_client_built", model=cfg.model)
     return _multimodal_client
+
+
+def _provider_label(llm_cfg) -> str:
+    if llm_cfg.provider_chain:
+        return " -> ".join(llm_cfg.provider_chain)
+    return llm_cfg.provider

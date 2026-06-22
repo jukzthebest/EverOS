@@ -7,10 +7,12 @@ lifespan, and registers the public routes (``/health``, ``/metrics``).
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from everos import __version__
 from everos.core.lifespan import (
@@ -37,6 +39,7 @@ from .lifespans import (
     SqliteLifespanProvider,
 )
 from .routes import (
+    dashboard,
     get,
     health,
     memorize,
@@ -120,6 +123,15 @@ def create_app(
     app.include_router(memorize.router)
     app.include_router(search.router)
     app.include_router(get.router)
+    app.include_router(dashboard.router)
+
+    dashboard_static = Path(__file__).parent / "static" / "dashboard"
+    if dashboard_static.exists():
+        app.mount(
+            "/dashboard",
+            StaticFiles(directory=dashboard_static, html=True),
+            name="dashboard",
+        )
 
     logger.info("app_created", docs_enabled=enable_docs)
     return app

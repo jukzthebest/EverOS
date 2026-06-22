@@ -28,6 +28,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 
 from everalgo.user_memory import AtomicFactExtractor
+from everalgo.user_memory.atomic_fact import ATOMIC_FACT_PROMPT
 
 from everos.component.llm import get_llm_client
 from everos.component.utils.datetime import from_timestamp, to_iso_format
@@ -38,6 +39,7 @@ from everos.infra.ome.decorator import offline_strategy
 from everos.infra.ome.triggers import Immediate
 from everos.infra.persistence.markdown import AtomicFactWriter
 from everos.memory.events import UserPipelineStarted
+from everos.memory.extract.language import localize_texts, memory_prompt
 from everos.memory.models import AtomicFact
 
 logger = get_logger(__name__)
@@ -75,8 +77,13 @@ async def extract_atomic_facts(
         return
 
     # 2. Run the LLM extractor once (algo prompt is subject-agnostic).
-    extractor = AtomicFactExtractor(llm=get_llm_client())
-    algo_facts = await extractor.aextract(memcell, sender_id=None)
+    llm = get_llm_client()
+    extractor = AtomicFactExtractor(llm=llm)
+    algo_facts = await extractor.aextract(
+        memcell,
+        sender_id=None,
+        prompt=memory_prompt(ATOMIC_FACT_PROMPT),
+    )
 
     # 3. Fan the fact list out to one domain AtomicFact per (sender, algo_fact).
     facts: list[AtomicFact] = [
@@ -89,6 +96,9 @@ async def extract_atomic_facts(
         for sid in sender_ids
         for algo_fact in algo_facts
     ]
+    localized = await localize_texts(llm, [fact.fact for fact in facts])
+    for fact, text in zip(facts, localized, strict=True):
+        fact.fact = text
 
     # 4. Group facts by owner so each sender's full list lands in one
     #    batched write.

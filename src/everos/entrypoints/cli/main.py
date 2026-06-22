@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import typer
 
-from .commands import cascade, init_cmd, server
+from .commands import cascade, import_cmd, index_cmd, init_cmd, server, sync_cmd
 
 app = typer.Typer(
     name="everos",
@@ -24,6 +24,9 @@ app = typer.Typer(
 
 app.add_typer(server.app, name="server")
 app.add_typer(cascade.app, name="cascade")
+app.add_typer(import_cmd.app, name="import")
+app.add_typer(sync_cmd.app, name="sync")
+app.add_typer(index_cmd.app, name="index")
 
 # ``init`` is a top-level leaf command (not a Typer group) — match the
 # idiomatic ``alembic init`` / ``django-admin startproject`` shape.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from everos.config import EmbeddingSettings
 
+from .local_hash_provider import LocalHashEmbeddingProvider
 from .openai_provider import OpenAIEmbeddingProvider
 from .protocol import EmbeddingProvider
 
@@ -16,7 +17,7 @@ def build_embedding_provider(
     *,
     dim: int = _DEFAULT_DIM,
 ) -> EmbeddingProvider:
-    """Build an OpenAI-compatible embedding provider from settings.
+    """Build an embedding provider from settings.
 
     Args:
         settings: The :class:`EmbeddingSettings` slice from
@@ -31,6 +32,9 @@ def build_embedding_provider(
     Raises:
         ValueError: If ``model``, ``api_key`` or ``base_url`` is unset.
     """
+    if settings.provider == "local_hash":
+        return LocalHashEmbeddingProvider(dim=dim)
+
     if not settings.model:
         raise ValueError(
             "Embedding model is not configured "

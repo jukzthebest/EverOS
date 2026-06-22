@@ -113,18 +113,24 @@ def _get_llm_client() -> LLMClient | None:
     from everos.config import load_settings
 
     cfg = load_settings().llm
-    api_key = cfg.api_key.get_secret_value() if cfg.api_key else ""
-    if not api_key or not cfg.base_url:
+    try:
+        _llm_client = build_llm_provider(cfg)
+    except ValueError as exc:
         logger.warning(
             "llm_not_configured",
-            hint="set [llm] api_key / base_url to enable hybrid / agentic search",
+            hint=f"configure [llm] for provider {cfg.provider!r}: {exc}",
         )
         _llm_client = None
     else:
-        _llm_client = build_llm_provider(cfg)
-        logger.info("search_llm_built", model=cfg.model)
+        logger.info("search_llm_built", model=cfg.model, provider=_provider_label(cfg))
     _llm_resolved = True
     return _llm_client
+
+
+def _provider_label(cfg) -> str:
+    if cfg.provider_chain:
+        return " -> ".join(cfg.provider_chain)
+    return cfg.provider
 
 
 def _get_manager() -> SearchManager:

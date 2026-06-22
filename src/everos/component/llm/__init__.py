@@ -11,6 +11,11 @@ Public surface:
 - :class:`LLMNotConfiguredError` — raised when credentials are missing.
 - :class:`OpenAIProvider` — concrete provider wrapping
   ``openai.AsyncOpenAI`` against any OpenAI-compatible endpoint.
+- :class:`CodexOAuthProvider` — provider backed by local Codex ChatGPT
+  OAuth WebSocket auth.
+- :class:`GrokOAuthProvider` — bearer-auth OpenAI-compatible Grok adapter.
+- :class:`FallbackLLMProvider` — ordered provider chain.
+- :class:`LanguageLLMProvider` — injects extraction language preference.
 - :func:`build_llm_provider` — settings-driven factory.
 - :func:`get_llm_client` — process-wide lazy singleton accessor.
 
@@ -23,7 +28,11 @@ External usage::
 from .client import LLMNotConfiguredError as LLMNotConfiguredError
 from .client import get_llm_client as get_llm_client
 from .client import get_multimodal_llm_client as get_multimodal_llm_client
+from .codex_oauth_provider import CodexOAuthProvider as CodexOAuthProvider
 from .factory import build_llm_provider as build_llm_provider
+from .fallback_provider import FallbackLLMProvider as FallbackLLMProvider
+from .grok_oauth_provider import GrokOAuthProvider as GrokOAuthProvider
+from .language_provider import LanguageLLMProvider as LanguageLLMProvider
 from .openai_provider import OpenAIProvider as OpenAIProvider
 from .protocol import ChatMessage as ChatMessage
 from .protocol import ChatResponse as ChatResponse
@@ -34,9 +43,13 @@ from .protocol import Usage as Usage
 __all__ = [
     "ChatMessage",
     "ChatResponse",
+    "CodexOAuthProvider",
+    "FallbackLLMProvider",
+    "GrokOAuthProvider",
     "LLMClient",
     "LLMError",
     "LLMNotConfiguredError",
+    "LanguageLLMProvider",
     "OpenAIProvider",
     "Usage",
     "build_llm_provider",

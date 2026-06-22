@@ -21,12 +21,49 @@
 # ── LLM ───────────────────────────────────────────────
 # OpenAI-protocol chat-completions endpoint used by the algo extractors.
 [llm]
+provider = "openai"
 model    = "gpt-4o-mini"
 api_key  = "sk-..."
 base_url = "https://api.openai.com/v1"
+# Prefer Simplified Chinese memory Markdown. Use "auto" to follow upstream prompts.
+extraction_language = "zh"
+
+# Fallback chain, Hermes-style. Providers are tried in order. Missing
+# provider config is skipped at startup; runtime request failures fall
+# through to the next configured provider.
+#
+# provider_chain = ["grok_oauth", "codex_oauth", "openai"]
+# grok_model   = "grok-build"
+# codex_model  = "gpt-5.5"
+# openai_model = "gpt-4o-mini"
+# openai_base_url = "https://api.openai.com/v1"
+# grok_base_url  = "https://cli-chat-proxy.grok.com/v1"
+# codex_auth_file = "~/.codex/auth.json"
+# grok_auth_file  = "~/.grok/auth.json"
+
+# Codex ChatGPT OAuth alternative. Reuses your local Codex login.
+# api_key is not used; auth_file defaults to ~/.codex/auth.json if omitted.
+#
+# [llm]
+# provider     = "codex_oauth"
+# codex_model  = "gpt-5.5"
+# codex_auth_file = "~/.codex/auth.json"
+# service_tier = "priority"
+# extraction_language = "zh"
+
+# Grok/SuperGrok CLI OAuth alternative. Reuses `grok login` credentials
+# from ~/.grok/auth.json and the documented CLI chat proxy.
+#
+# [llm]
+# provider  = "grok_oauth"
+# grok_model     = "grok-build"
+# grok_auth_file = "~/.grok/auth.json"
+# grok_base_url  = "https://cli-chat-proxy.grok.com/v1"
+# extraction_language = "zh"
 
 # ── Embedding ─────────────────────────────────────────
 [embedding]
+provider = "openai"
 model    = "Qwen/Qwen3-Embedding-4B"
 api_key  = "..."
 base_url = "https://api.deepinfra.com/v1/openai"
@@ -35,6 +72,14 @@ timeout_seconds = 30.0
 max_retries     = 3
 batch_size      = 10
 max_concurrent  = 5
+
+# Offline bootstrap. No API key required; lower retrieval quality than a
+# semantic embedding model, but enough to build local LanceDB indexes.
+#
+# provider = "local_hash"
+# model = ""
+# api_key = ""
+# base_url = ""
 
 # ── Rerank ────────────────────────────────────────────
 [rerank]

@@ -113,19 +113,56 @@ class LLMSettings(BaseModel):
     """LLM client configuration.
 
     Read by the service layer when lazily constructing the LLM client
-    handed to algo extractors. Provider-agnostic field names — the
-    project follows the OpenAI API protocol so any OpenAI-compatible
-    endpoint plugs in via ``base_url``.
+    handed to algo extractors. ``provider="openai"`` follows the OpenAI
+    API protocol so any OpenAI-compatible endpoint plugs in via
+    ``base_url``. ``provider="codex_oauth"`` reuses the local Codex
+    ChatGPT OAuth token and talks to the ChatGPT Codex backend. Set
+    ``provider_chain`` to enable fallback, for example
+    ``["grok_oauth", "codex_oauth", "openai"]``.
 
     Env binding (via parent ``Settings``):
+        EVEROS_LLM__PROVIDER
+        EVEROS_LLM__PROVIDER_CHAIN
         EVEROS_LLM__MODEL
+        EVEROS_LLM__OPENAI_MODEL
+        EVEROS_LLM__CODEX_MODEL
+        EVEROS_LLM__GROK_MODEL
         EVEROS_LLM__API_KEY
         EVEROS_LLM__BASE_URL
+        EVEROS_LLM__OPENAI_BASE_URL
+        EVEROS_LLM__CODEX_BASE_URL
+        EVEROS_LLM__GROK_BASE_URL
+        EVEROS_LLM__AUTH_FILE
+        EVEROS_LLM__CODEX_AUTH_FILE
+        EVEROS_LLM__GROK_AUTH_FILE
+        EVEROS_LLM__SERVICE_TIER
+        EVEROS_LLM__EXTRACTION_LANGUAGE
     """
 
+    provider: Literal["openai", "codex_oauth", "grok_oauth"] = "openai"
+    provider_chain: list[Literal["openai", "codex_oauth", "grok_oauth"]] = []
     model: str = "gpt-4o-mini"
+    openai_model: str | None = None
+    codex_model: str | None = None
+    grok_model: str | None = None
     api_key: SecretStr | None = None
     base_url: str | None = None
+    openai_base_url: str | None = None
+    codex_base_url: str | None = None
+    grok_base_url: str | None = None
+    auth_file: Path | None = None
+    codex_auth_file: Path | None = None
+    grok_auth_file: Path | None = None
+    service_tier: str | None = None
+    originator: str = "codex_cli_rs"
+    user_agent: str = "codex-cli/0.141.0"
+    extraction_language: Literal["auto", "zh", "en"] = "auto"
+    """Preferred language for memory extraction artifacts.
+
+    ``"zh"`` injects a lightweight system instruction asking extractors to
+    write natural-language Markdown content in Simplified Chinese while
+    preserving ids, paths, code, commands, and quoted evidence verbatim.
+    """
 
 
 class MultimodalSettings(BaseModel):
@@ -161,12 +198,13 @@ class MultimodalSettings(BaseModel):
 class EmbeddingSettings(BaseModel):
     """Embedding client configuration.
 
-    OpenAI-compatible embedding endpoint. ``model`` / ``api_key`` /
-    ``base_url`` are required at runtime when the embedding capability
-    is enabled; the runtime knobs (``timeout`` etc.) have sensible
-    defaults.
+    ``provider="openai"`` uses an OpenAI-compatible endpoint and requires
+    ``model`` / ``api_key`` / ``base_url`` at runtime. ``provider="local_hash"``
+    is a deterministic offline bootstrap provider; it needs no API key but
+    is lower quality than a semantic embedding model.
 
     Env binding:
+        EVEROS_EMBEDDING__PROVIDER
         EVEROS_EMBEDDING__MODEL
         EVEROS_EMBEDDING__API_KEY
         EVEROS_EMBEDDING__BASE_URL
@@ -176,6 +214,7 @@ class EmbeddingSettings(BaseModel):
         EVEROS_EMBEDDING__MAX_CONCURRENT
     """
 
+    provider: Literal["openai", "local_hash"] = "openai"
     model: str | None = None
     api_key: SecretStr | None = None
     base_url: str | None = None

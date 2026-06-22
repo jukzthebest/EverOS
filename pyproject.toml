@@ -31,7 +31,9 @@ dependencies = [
     "greenlet>=3.0",              # Required by SQLAlchemy async
 
     # LLM & embedding (one provider per file pattern)
+    "httpx>=0.28.0",
     "openai>=1.0.0",
+    "websockets>=14.0",
 
     # Markdown / file system
     "PyYAML>=6.0",                # YAML frontmatter parsing

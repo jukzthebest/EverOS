@@ -22,6 +22,7 @@ from everos.component.utils.datetime import from_timestamp, to_iso_format
 from everos.core.observability.logging import get_logger
 from everos.memory import Episode, IngestResult, PipelineOutcome
 from everos.memory.events import EpisodeExtracted, UserPipelineStarted
+from everos.memory.extract.language import episode_custom_instructions
 from everos.memory.prompt_slots import PromptLoader
 
 if TYPE_CHECKING:
@@ -100,7 +101,10 @@ class UserMemoryPipeline:
             # is then md-only: every user sender owns a copy of the same
             # narrative under its own owner_id path.
             algo_ep = await self._ep_ext.aextract(
-                cell, sender_id=None, prompt=episode_prompt
+                cell,
+                sender_id=None,
+                prompt=episode_prompt,
+                custom_instructions=episode_custom_instructions(),
             )
             for sender_id in user_senders:
                 ep = Episode.from_algo(

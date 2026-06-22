@@ -8,6 +8,7 @@ import pytest
 from pydantic import SecretStr
 
 from everos.component.llm import LLMNotConfiguredError
+from everos.component.llm.language_provider import LanguageLLMProvider
 from everos.config import Settings
 from everos.config.settings import LLMSettings
 
@@ -23,10 +24,12 @@ def _patch_settings(
     *,
     api_key: str | None,
     base_url: str | None,
+    provider: str = "openai",
 ) -> None:
     """Stub the ``load_settings`` reference bound inside the client module."""
     cfg = Settings(
         llm=LLMSettings(
+            provider=provider,  # type: ignore[arg-type]
             model="gpt-4o-mini",
             api_key=SecretStr(api_key) if api_key is not None else None,
             base_url=base_url,
@@ -55,10 +58,31 @@ def test_returns_singleton_when_configured(monkeypatch: pytest.MonkeyPatch) -> N
     _reset_singleton(monkeypatch)
     _patch_settings(monkeypatch, api_key="sk-test", base_url="https://example.test")
     sentinel = object()
-    monkeypatch.setattr(_client_mod, "build_client", lambda cfg: sentinel)
+    monkeypatch.setattr(_client_mod, "build_llm_provider", lambda cfg: sentinel)
 
     first = _client_mod.get_llm_client()
     second = _client_mod.get_llm_client()
 
     assert first is sentinel
     assert first is second
+
+
+def test_wraps_client_when_extraction_language_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _reset_singleton(monkeypatch)
+    cfg = Settings(
+        llm=LLMSettings(
+            provider="codex_oauth",
+            model="gpt-5.5",
+            extraction_language="zh",
+        )
+    )
+    sentinel = object()
+    monkeypatch.setattr(_client_mod, "load_settings", lambda: cfg)
+    monkeypatch.setattr(_client_mod, "build_llm_provider", lambda cfg: sentinel)
+
+    client = _client_mod.get_llm_client()
+
+    assert isinstance(client, LanguageLLMProvider)
+    assert client._provider is sentinel

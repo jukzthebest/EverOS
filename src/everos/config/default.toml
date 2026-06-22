@@ -55,12 +55,35 @@ cache_size_kb = 2048
 # read_consistency_seconds = 5.0
 
 [llm]
-# Provider-agnostic OpenAI-protocol client config. Override via env:
-#   EVEROS_LLM__MODEL, EVEROS_LLM__API_KEY, EVEROS_LLM__BASE_URL
+# Provider config. Override via env:
+#   EVEROS_LLM__PROVIDER, EVEROS_LLM__MODEL, EVEROS_LLM__API_KEY,
+#   EVEROS_LLM__PROVIDER_CHAIN, EVEROS_LLM__OPENAI_MODEL,
+#   EVEROS_LLM__CODEX_MODEL, EVEROS_LLM__GROK_MODEL, EVEROS_LLM__BASE_URL,
+#   EVEROS_LLM__OPENAI_BASE_URL, EVEROS_LLM__CODEX_BASE_URL,
+#   EVEROS_LLM__GROK_BASE_URL, EVEROS_LLM__AUTH_FILE,
+#   EVEROS_LLM__CODEX_AUTH_FILE, EVEROS_LLM__GROK_AUTH_FILE,
+#   EVEROS_LLM__SERVICE_TIER
 # Or via a ``.env`` file next to the project root (auto-loaded).
+provider = "openai"
+# provider_chain = ["grok_oauth", "codex_oauth", "openai"]
 model = "gpt-4o-mini"
+# openai_model = "gpt-4o-mini"
+# codex_model = "gpt-5.5"
+# grok_model = "grok-build"
 # api_key = ""
 # base_url = ""
+# openai_base_url = "https://api.openai.com/v1"
+# codex_base_url = "wss://chatgpt.com/backend-api/codex/responses"
+# grok_base_url = "https://cli-chat-proxy.grok.com/v1"
+# auth_file = "~/.codex/auth.json"
+# codex_auth_file = "~/.codex/auth.json"
+# grok_auth_file = "~/.grok/auth.json"
+# service_tier = "priority"
+# Memory extraction language:
+#   "auto" -> let model follow default prompts
+#   "zh"   -> prefer Simplified Chinese Markdown memory content
+#   "en"   -> prefer English Markdown memory content
+extraction_language = "auto"
 
 [multimodal]
 # Independent LLM for multimodal parsing (everalgo-parser); must accept
@@ -78,9 +101,13 @@ max_concurrency = 4
 
 [embedding]
 # OpenAI-compatible embedding endpoint. Override via env:
-#   EVEROS_EMBEDDING__MODEL, EVEROS_EMBEDDING__API_KEY, EVEROS_EMBEDDING__BASE_URL
+#   EVEROS_EMBEDDING__PROVIDER, EVEROS_EMBEDDING__MODEL,
+#   EVEROS_EMBEDDING__API_KEY, EVEROS_EMBEDDING__BASE_URL
 # model / api_key / base_url have no shipped defaults — must be set
 # (env or user toml) before the embedding capability is used.
+# provider = "openai"
+# Offline bootstrap alternative:
+# provider = "local_hash"
 # model     = "Qwen/Qwen3-Embedding-4B"
 # api_key   = ""
 # base_url  = "https://api.example.com/v1"

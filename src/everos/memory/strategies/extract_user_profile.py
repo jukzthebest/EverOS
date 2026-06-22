@@ -30,6 +30,10 @@ from __future__ import annotations
 from everalgo.types import MemCell as AlgoMemCell
 from everalgo.types import Profile as AlgoProfile
 from everalgo.user_memory import ProfileExtractor
+from everalgo.user_memory.profile import (
+    PROFILE_INITIAL_EXTRACTION_PROMPT,
+    PROFILE_UPDATE_PROMPT,
+)
 
 from everos.component.llm import get_llm_client
 from everos.core.observability.logging import get_logger
@@ -44,6 +48,7 @@ from everos.infra.persistence.markdown import (
 )
 from everos.infra.persistence.sqlite import cluster_repo, memcell_repo
 from everos.memory.events import ProfileClusterUpdated
+from everos.memory.extract.language import localize_texts, memory_prompt
 from everos.memory.strategies._partition_locks import get_partition_lock
 
 logger = get_logger(__name__)
@@ -151,8 +156,16 @@ async def extract_user_profile(
         # 5. Run the LLM extractor — INIT (no prior) or UPDATE (existing).
         old_profile = _to_algo_profile(existing[0]) if existing else None
         extractor = ProfileExtractor(llm=get_llm_client())
+        prompt = memory_prompt(
+            PROFILE_UPDATE_PROMPT
+            if old_profile is not None
+            else PROFILE_INITIAL_EXTRACTION_PROMPT
+        )
         new_profile = await extractor.aextract(
-            algo_memcells, sender_id=event.owner_id, old_profile=old_profile
+            algo_memcells,
+            sender_id=event.owner_id,
+            old_profile=old_profile,
+            prompt=prompt,
         )
 
         # 6. Write the fresh profile back to users/<user_id>/user.md.
@@ -194,10 +207,15 @@ async def _persist_profile(
     extras = profile.model_dump(exclude={"owner_id", "summary", "timestamp"})
     explicit_info = extras.get("explicit_info") or []
     implicit_traits = extras.get("implicit_traits") or []
+    summary, explicit_info, implicit_traits = await _localize_profile_fields(
+        profile.summary,
+        list(explicit_info),
+        list(implicit_traits),
+    )
     frontmatter = UserProfileFrontmatter(
         id=f"profile_{owner_id}",
         user_id=owner_id,
-        summary=profile.summary,
+        summary=summary,
         explicit_info=list(explicit_info),
         implicit_traits=list(implicit_traits),
         profile_timestamp_ms=profile.timestamp,
@@ -205,7 +223,31 @@ async def _persist_profile(
     await _get_writer().write(
         owner_id,
         frontmatter=frontmatter,
-        body=profile.summary,
+        body=summary,
         app_id=app_id,
         project_id=project_id,
     )
+
+
+async def _localize_profile_fields(
+    summary: str,
+    explicit_info: list[object],
+    implicit_traits: list[object],
+) -> tuple[str, list[object], list[object]]:
+    fields: list[tuple[dict[str, object], str]] = []
+    payloads = [*explicit_info, *implicit_traits]
+    texts = [summary]
+    for item in payloads:
+        if not isinstance(item, dict):
+            continue
+        for key, value in item.items():
+            if isinstance(value, str) and value.strip():
+                fields.append((item, key))
+                texts.append(value)
+
+    localized = await localize_texts(get_llm_client(), texts)
+    if localized:
+        summary = localized[0]
+    for (item, key), value in zip(fields, localized[1:], strict=True):
+        item[key] = value
+    return summary, explicit_info, implicit_traits

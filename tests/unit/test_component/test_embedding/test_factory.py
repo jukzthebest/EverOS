@@ -6,6 +6,7 @@ import pytest
 from pydantic import SecretStr
 
 from everos.component.embedding import (
+    LocalHashEmbeddingProvider,
     OpenAIEmbeddingProvider,
     build_embedding_provider,
 )
@@ -50,3 +51,13 @@ def test_custom_dim_passes_through() -> None:
     # only if straightforward. Skip introspection if attr name differs.
     if hasattr(p, "_dim"):
         assert p._dim == 512
+
+
+async def test_builds_local_hash_embedding_provider_without_credentials() -> None:
+    s = EmbeddingSettings(provider="local_hash")
+    p = build_embedding_provider(s, dim=16)
+
+    assert isinstance(p, LocalHashEmbeddingProvider)
+    assert p.dim == 16
+    assert await p.embed("same text") == await p.embed("same text")
+    assert len(await p.embed("same text")) == 16
