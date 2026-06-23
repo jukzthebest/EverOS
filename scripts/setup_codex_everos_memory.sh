@@ -5,9 +5,17 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MEMORY_ROOT="${EVEROS_MEMORY_ROOT:-$HOME/Obsidian/EverOS-Memory/everos}"
 CONFIG_FILE="${EVEROS_CONFIG_FILE:-$HOME/.everos/config.toml}"
 BASE_URL="${EVEROS_MEMORY_BASE_URL:-http://127.0.0.1:8000}"
+LAUNCH_AGENT_LABEL="com.lengxiaochu.everos-memory"
+LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$LAUNCH_AGENT_LABEL.plist"
+UV_BIN="$(command -v uv || true)"
+
+if [[ -z "$UV_BIN" ]]; then
+  echo "error: uv is required. Install it first, for example: brew install uv" >&2
+  exit 1
+fi
 
 mkdir -p "$HOME/.everos" "$HOME/.local/bin" "$HOME/.codex/hooks" \
-  "$HOME/.codex/rules" "$HOME/.codex/log" "$MEMORY_ROOT"
+  "$HOME/.codex/rules" "$HOME/.codex/log" "$HOME/Library/LaunchAgents" "$MEMORY_ROOT"
 
 ln -sf "$REPO_DIR/scripts/everos-memory" "$HOME/.local/bin/everos-memory"
 chmod +x "$REPO_DIR/scripts/everos-memory"
@@ -105,13 +113,68 @@ else:
 PY
 fi
 
+cat > "$LAUNCH_AGENT_FILE" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$LAUNCH_AGENT_LABEL</string>
+
+  <key>WorkingDirectory</key>
+  <string>$REPO_DIR</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>$UV_BIN</string>
+    <string>run</string>
+    <string>everos</string>
+    <string>server</string>
+    <string>start</string>
+    <string>--host</string>
+    <string>127.0.0.1</string>
+    <string>--port</string>
+    <string>8000</string>
+    <string>--log-level</string>
+    <string>info</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>EVEROS_CONFIG_FILE</key>
+    <string>$CONFIG_FILE</string>
+    <key>NO_PROXY</key>
+    <string>127.0.0.1,localhost</string>
+    <key>no_proxy</key>
+    <string>127.0.0.1,localhost</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>$HOME/.everos/server.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>$HOME/.everos/server.err.log</string>
+</dict>
+</plist>
+EOF
+
+launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_FILE"
+launchctl enable "gui/$(id -u)/$LAUNCH_AGENT_LABEL"
+launchctl kickstart -k "gui/$(id -u)/$LAUNCH_AGENT_LABEL"
+
 echo "EverOS Codex memory setup complete."
 echo "Repo: $REPO_DIR"
 echo "Memory root: $MEMORY_ROOT"
 echo "Config: $CONFIG_FILE"
 echo "API: $BASE_URL"
+echo "LaunchAgent: $LAUNCH_AGENT_FILE"
 echo
 echo "Next:"
 echo "  cd '$REPO_DIR'"
-echo "  EVEROS_CONFIG_FILE='$CONFIG_FILE' uv run everos server start --host 127.0.0.1 --port 8000"
 echo "  everos-memory doctor"

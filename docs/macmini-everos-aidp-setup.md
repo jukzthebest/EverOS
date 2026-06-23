@@ -110,10 +110,10 @@ max_concurrent = 5
 
 ## 4. 启动 EverOS
 
-```bash
-cd ~/Documents/daily/everos-codex-oauth-poc
-EVEROS_CONFIG_FILE=~/.everos/config.toml \
-uv run everos server start --host 127.0.0.1 --port 8000 --log-level info
+setup 脚本会自动安装并启动：
+
+```text
+~/Library/LaunchAgents/com.lengxiaochu.everos-memory.plist
 ```
 
 健康检查：
@@ -500,53 +500,11 @@ EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade status
 
 ## 11. 开机自启
 
-创建 `~/Library/LaunchAgents/com.lengxiaochu.everos-study.plist`：
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
- "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.lengxiaochu.everos-study</string>
-  <key>WorkingDirectory</key>
-  <string>/Users/lengxiaochu/Documents/daily/everos-codex-oauth-poc</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/opt/homebrew/bin/uv</string>
-    <string>run</string>
-    <string>everos</string>
-    <string>server</string>
-    <string>start</string>
-    <string>--host</string>
-    <string>127.0.0.1</string>
-    <string>--port</string>
-    <string>8000</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>EVEROS_CONFIG_FILE</key>
-    <string>/Users/lengxiaochu/.everos/config.toml</string>
-  </dict>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>/Users/lengxiaochu/.everos/server.out.log</string>
-  <key>StandardErrorPath</key>
-  <string>/Users/lengxiaochu/.everos/server.err.log</string>
-</dict>
-</plist>
-```
-
-加载：
+setup 已经创建并加载 launchd 服务。检查：
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.lengxiaochu.everos-study.plist 2>/dev/null || true
-launchctl load ~/Library/LaunchAgents/com.lengxiaochu.everos-study.plist
-launchctl start com.lengxiaochu.everos-study
+launchctl print gui/$(id -u)/com.lengxiaochu.everos-memory | sed -n '1,80p'
+lsof -nP -iTCP:8000 -sTCP:LISTEN
 ```
 
 ## 12. 验收清单

@@ -38,11 +38,8 @@ bash scripts/setup_codex_everos_memory.sh
 
 ## 启动服务
 
-```bash
-cd ~/Documents/daily/everos-codex-oauth-poc
-EVEROS_CONFIG_FILE=~/.everos/config.toml \
-uv run everos server start --host 127.0.0.1 --port 8000 --log-level info
-```
+`scripts/setup_codex_everos_memory.sh` 会自动安装并启动 launchd 服务：
+`~/Library/LaunchAgents/com.lengxiaochu.everos-memory.plist`。
 
 验证：
 
@@ -60,6 +57,14 @@ export no_proxy="$NO_PROXY"
 
 `setup_codex_everos_memory.sh` 会自动把这两行写入 `~/.zshrc`。`everos-memory`
 自身也会绕过代理访问 `127.0.0.1:8000`。
+
+如果需要手动排障，可以前台启动一次：
+
+```bash
+cd ~/Documents/daily/everos-codex-oauth-poc
+EVEROS_CONFIG_FILE=~/.everos/config.toml \
+uv run everos server start --host 127.0.0.1 --port 8000 --log-level info
+```
 
 ## 后续步骤
 
@@ -178,5 +183,5 @@ EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade status
 详细方案见：
 
 ```text
-docs/macmini-everos-study-setup.md
+docs/macmini-everos-aidp-setup.md
 ```
