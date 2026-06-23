@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Codex Stop hook: asynchronously import stable Codex sessions into EverOS.
+// Codex Stop hook: asynchronously import Codex session chunks into EverOS.
 
 const fs = require("fs");
 const http = require("http");
@@ -14,6 +14,9 @@ const HELPER =
 const SESSIONS_DIR = path.join(os.homedir(), ".codex", "sessions");
 const LOG = path.join(os.homedir(), ".codex", "log", "everos-memory-hook.log");
 const LOCK = path.join(os.tmpdir(), "everos-memory-import.lock");
+const CHUNK_MESSAGES = process.env.EVEROS_MEMORY_CHUNK_MESSAGES || "40";
+const STABLE_MIN_AGE_SECONDS =
+  process.env.EVEROS_MEMORY_STABLE_MIN_AGE_SECONDS || "180";
 
 let chunks = [];
 let done = false;
@@ -85,7 +88,28 @@ function spawnImport(currentSessionId, detectedMemoryRoot) {
     process.env.EVEROS_MEMORY_ROOT ||
     detectedMemoryRoot ||
     path.join(os.homedir(), ".everos", "memory");
-  const args = [
+  const currentSessionFile = findCurrentSessionFile(currentSessionId);
+  const commands = [];
+  if (currentSessionFile) {
+    const currentArgs = [
+      "run",
+      "everos",
+      "import",
+      "codex-structured",
+      "--session-path",
+      currentSessionFile,
+      "--output-root",
+      memoryRoot,
+      "--min-age-seconds",
+      "0",
+      "--chunk-messages",
+      CHUNK_MESSAGES,
+      "--complete-chunks-only",
+      "--skip-existing",
+    ];
+    commands.push(`uv ${currentArgs.map(shellQuote).join(" ")}`);
+  }
+  const stableArgs = [
     "run",
     "everos",
     "import",
@@ -98,11 +122,14 @@ function spawnImport(currentSessionId, detectedMemoryRoot) {
     "--limit",
     "1",
     "--min-age-seconds",
-    "180",
+    STABLE_MIN_AGE_SECONDS,
+    "--chunk-messages",
+    CHUNK_MESSAGES,
     "--skip-existing",
   ];
-  if (currentSessionId) args.push("--exclude-session-id", currentSessionId);
-  const importCmd = `uv ${args.map(shellQuote).join(" ")}`;
+  if (currentSessionId) stableArgs.push("--exclude-session-id", currentSessionId);
+  commands.push(`uv ${stableArgs.map(shellQuote).join(" ")}`);
+  const importCmd = commands.join("; status=$?; if [ \"$status\" -ne 0 ]; then exit $status; fi; ");
   const cascadeCmd = "uv run everos cascade sync";
   const command = `${importCmd}; status=$?; if [ "$status" -eq 0 ]; then ${cascadeCmd}; status=$?; fi; rm -f ${shellQuote(LOCK)}; exit $status`;
   const child = spawn("/bin/sh", ["-c", command], {
@@ -118,6 +145,51 @@ function spawnImport(currentSessionId, detectedMemoryRoot) {
     },
   });
   child.unref();
+}
+
+function findCurrentSessionFile(sessionId) {
+  const direct = directSessionPathFromEnv();
+  if (direct) return direct;
+  if (!sessionId) return "";
+  const stack = [SESSIONS_DIR];
+  let newest = "";
+  let newestMtime = 0;
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+      if (!entry.name.includes(sessionId)) continue;
+      try {
+        const stat = fs.statSync(full);
+        if (stat.mtimeMs > newestMtime) {
+          newest = full;
+          newestMtime = stat.mtimeMs;
+        }
+      } catch {}
+    }
+  }
+  return newest;
+}
+
+function directSessionPathFromEnv() {
+  const value = process.env.EVEROS_MEMORY_SESSION_PATH || "";
+  if (!value) return "";
+  try {
+    return fs.statSync(value).isFile() ? value : "";
+  } catch {
+    return "";
+  }
 }
 
 function resolveRepo() {

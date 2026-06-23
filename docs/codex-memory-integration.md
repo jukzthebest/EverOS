@@ -66,8 +66,16 @@ The hook is conservative:
 - it can be routed with `EVEROS_CODEX_PROJECT_RULES`;
 - it suppresses output so the user does not see retrieval chatter.
 
-The `Stop` hook imports stable Codex session files after a short age threshold
-so the current partial session is not re-imported while still active.
+The `Stop` hook has two write paths:
+
+- current session: import complete message chunks from the active session file;
+  the growing tail is left for a later Stop event so partial chunks are not
+  frozen too early.
+- stable sessions: import one older session after the age threshold as a
+  backfill path.
+
+This makes long-running sessions usable: a large session is split into part
+records instead of being discarded as oversized.
 
 ## Configuration
 
@@ -82,6 +90,8 @@ export EVEROS_MEMORY_PROJECTS="default"
 export EVEROS_MEMORY_PROJECT="auto"
 export EVEROS_MEMORY_RECALL_TERMS="previous,last,before,memory,remember,command,config,path,file,template,how,why"
 export EVEROS_MEMORY_DIRECT_LOOKUP_TERMS="command,cmd,connect,login,shell,cli"
+export EVEROS_MEMORY_CHUNK_MESSAGES="40"
+export EVEROS_MEMORY_STABLE_MIN_AGE_SECONDS="180"
 ```
 
 Project routing syntax:

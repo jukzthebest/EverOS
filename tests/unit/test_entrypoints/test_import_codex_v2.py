@@ -9,8 +9,10 @@ import everos.entrypoints.cli.commands.import_cmd as import_cmd
 from everos.entrypoints.cli.commands.import_cmd import (
     CodexMessage,
     CodexSession,
+    _chunk_long_sessions,
     _parse_codex_project_rules,
     _project_id_from_cwd,
+    _session_content_sha256,
     _session_to_v2_record,
     _write_v2_record,
 )
@@ -89,3 +91,45 @@ def test_project_id_from_cwd_uses_configurable_regex_rules() -> None:
         assert _project_id_from_cwd("/tmp/work/unknown repo") == "unknown_repo"
     finally:
         import_cmd._CODEX_PROJECT_RULES = original_rules
+
+
+def test_chunk_long_sessions_can_drop_growing_tail(tmp_path: Path) -> None:
+    messages = [
+        CodexMessage(role="user", content=f"问题 {i}", timestamp_ms=i)
+        for i in range(5)
+    ]
+    session = CodexSession(
+        path=tmp_path / "rollout.jsonl",
+        session_id="session-1",
+        project_id="Daily",
+        agent_id="codex",
+        messages=messages,
+    )
+
+    chunks = _chunk_long_sessions([session], 2, complete_chunks_only=True)
+
+    assert [chunk.session_id for chunk in chunks] == [
+        "session-1.part001",
+        "session-1.part002",
+    ]
+    assert [len(chunk.messages) for chunk in chunks] == [2, 2]
+
+
+def test_session_content_hash_is_stable_for_unchanged_part(tmp_path: Path) -> None:
+    path = tmp_path / "rollout.jsonl"
+    path.write_text("before", encoding="utf-8")
+    session = CodexSession(
+        path=path,
+        session_id="session-1.part001",
+        project_id="Daily",
+        agent_id="codex",
+        messages=[
+            CodexMessage(role="user", content="问题", timestamp_ms=1),
+            CodexMessage(role="assistant", content="答案", timestamp_ms=2),
+        ],
+    )
+    first = _session_content_sha256(session)
+
+    path.write_text("after file growth", encoding="utf-8")
+
+    assert _session_content_sha256(session) == first

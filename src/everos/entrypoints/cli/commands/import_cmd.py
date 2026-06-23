@@ -336,6 +336,16 @@ def import_codex_v2(
         Path,
         typer.Option("--sessions-dir", help="Root containing Codex JSONL files."),
     ] = _DEFAULT_CODEX_SESSIONS_DIR,
+    session_path: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--session-path",
+            help=(
+                "Import one explicit Codex JSONL file. Repeat to import multiple "
+                "files without scanning the whole sessions tree."
+            ),
+        ),
+    ] = None,
     output_root: Annotated[
         Path,
         typer.Option("--output-root", help="Structured memory root to write."),
@@ -372,6 +382,23 @@ def import_codex_v2(
             help="Only import session files whose mtime is at least N seconds old.",
         ),
     ] = 0,
+    chunk_messages: Annotated[
+        int | None,
+        typer.Option(
+            "--chunk-messages",
+            help="Split sessions longer than N messages into stable part records.",
+        ),
+    ] = None,
+    complete_chunks_only: Annotated[
+        bool,
+        typer.Option(
+            "--complete-chunks-only/--include-tail-chunk",
+            help=(
+                "With --chunk-messages, import only full chunks and leave the "
+                "growing tail for a later pass."
+            ),
+        ),
+    ] = False,
     exclude_session_id: Annotated[
         list[str] | None,
         typer.Option("--exclude-session-id", help="Skip a session id."),
@@ -404,19 +431,26 @@ def import_codex_v2(
         else set()
     )
     oversized_limit = max_size_mib * 1024 * 1024
-    paths = sorted(sessions_dir.expanduser().rglob("*.jsonl"))
+    if chunk_messages is not None and chunk_messages <= 0:
+        raise typer.BadParameter("--chunk-messages must be greater than 0")
+    if session_path:
+        paths = [p.expanduser().resolve() for p in session_path]
+    else:
+        paths = sorted(sessions_dir.expanduser().rglob("*.jsonl"))
     if newest:
         paths.reverse()
     sessions: list[CodexSession] = []
     oversized: list[CodexSession] = []
     now = time.time()
     for path in paths:
+        if not path.exists():
+            raise typer.BadParameter(f"session path does not exist: {path}")
         size = path.stat().st_size
         if min_age_seconds and now - path.stat().st_mtime < min_age_seconds:
             continue
         if min_size_bytes and size < min_size_bytes:
             continue
-        if size > oversized_limit and not include_oversized:
+        if size > oversized_limit and not include_oversized and chunk_messages is None:
             meta_session = _parse_codex_session_meta(
                 path,
                 default_agent_id=agent_id,
@@ -446,15 +480,26 @@ def import_codex_v2(
             continue
         sessions.append(session)
 
+    if chunk_messages is not None:
+        sessions = _chunk_long_sessions(
+            sessions,
+            chunk_messages,
+            complete_chunks_only=complete_chunks_only,
+        )
+
     selected: list[CodexSession] = []
     skipped_low_value = 0
     skipped_duplicate = 0
+    skipped_existing = 0
     seen_session_keys: set[tuple[str, str]] = set()
     for session in sessions:
+        key = (session.project_id, session.session_id)
+        if key in existing_session_keys:
+            skipped_existing += 1
+            continue
         if not _has_memory_value(session):
             skipped_low_value += 1
             continue
-        key = (session.project_id, session.session_id)
         if key in seen_session_keys:
             skipped_duplicate += 1
             continue
@@ -466,7 +511,8 @@ def import_codex_v2(
     typer.echo(
         "structured import plan: "
         f"selected={len(selected)} oversized={len(oversized)} "
-        f"low_value={skipped_low_value} duplicate={skipped_duplicate} root={root}"
+        f"existing={skipped_existing} low_value={skipped_low_value} "
+        f"duplicate={skipped_duplicate} root={root}"
     )
     if dry_run:
         for session in selected[:20]:
@@ -690,23 +736,30 @@ def _has_memory_value(session: CodexSession) -> bool:
 def _chunk_long_sessions(
     sessions: list[CodexSession],
     chunk_messages: int,
+    *,
+    complete_chunks_only: bool = False,
 ) -> list[CodexSession]:
     chunked: list[CodexSession] = []
     for session in sessions:
         if len(session.messages) <= chunk_messages:
+            if complete_chunks_only and len(session.messages) < chunk_messages:
+                continue
             chunked.append(session)
             continue
         for index, start in enumerate(
             range(0, len(session.messages), chunk_messages),
             1,
         ):
+            messages = session.messages[start : start + chunk_messages]
+            if complete_chunks_only and len(messages) < chunk_messages:
+                continue
             chunked.append(
                 CodexSession(
                     path=session.path,
                     session_id=_safe_id(f"{session.session_id}.part{index:03d}"),
                     project_id=session.project_id,
                     agent_id=session.agent_id,
-                    messages=session.messages[start : start + chunk_messages],
+                    messages=messages,
                     cwd=session.cwd,
                 )
             )
@@ -774,7 +827,7 @@ def _session_to_v2_record(
         final_assistant=final_assistant,
         messages=session.messages,
     )
-    source_hash = _file_sha256(session.path)
+    source_hash = _session_content_sha256(session)
     return {
         "schema_version": 2,
         "type": kind,
@@ -1155,6 +1208,20 @@ def _file_sha256(path: Path) -> str:
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             h.update(chunk)
+    return h.hexdigest()
+
+
+def _session_content_sha256(session: CodexSession) -> str:
+    h = __import__("hashlib").sha256()
+    h.update(session.session_id.encode("utf-8"))
+    h.update(b"\0")
+    for msg in session.messages:
+        h.update(msg.role.encode("utf-8"))
+        h.update(b"\0")
+        h.update(str(msg.timestamp_ms).encode("ascii"))
+        h.update(b"\0")
+        h.update(msg.content.encode("utf-8"))
+        h.update(b"\0")
     return h.hexdigest()
 
 
