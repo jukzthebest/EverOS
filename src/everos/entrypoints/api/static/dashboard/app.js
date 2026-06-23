@@ -84,6 +84,14 @@ async function runSearch(event) {
   if (!query) return;
 
   const ownerType = $("#searchOwnerType").value;
+  const method = $("#searchMethod").value;
+  const literalTerms = requiredLiteralTerms(query);
+  if (method === "vector" && literalTerms.length) {
+    $("#searchResults").textContent =
+      `Vector search is semantic-only. Exact terms detected: ${literalTerms.join(", ")}. Use keyword or hybrid.`;
+    $("#searchPreview").textContent = "No result selected.";
+    return;
+  }
   const appId = $("#searchAppId").value.trim() || DEFAULT_APP_ID;
   const results = $("#searchResults");
   results.textContent = "Resolving projects...";
@@ -92,7 +100,7 @@ async function runSearch(event) {
   const basePayload = {
     query,
     app_id: appId,
-    method: $("#searchMethod").value,
+    method,
     top_k: 20,
   };
 
