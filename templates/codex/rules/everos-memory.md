@@ -34,6 +34,9 @@ Output contract:
 
 - Use EverOS silently. Do not narrate steps such as "checking memory",
   "loading a skill", "reading MEMORY.md", or "searched for ...".
+- Recall should be default-on for non-trivial user prompts. Do not gate recall
+  on a Chinese/English keyword allowlist; use keywords only for ranking or
+  candidate filtering.
 - For direct command/template lookups, lead with the command or concrete
   answer. Add at most one short source/confidence line after the answer.
 - Do not run ad-hoc `rg` over `MEMORY.md` before or after `everos-memory`

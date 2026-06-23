@@ -8,17 +8,30 @@ const { spawnSync } = require("child_process");
 
 const LOG = path.join(os.homedir(), ".codex", "log", "everos-memory-prompt-hook.log");
 const COMMAND_TIMEOUT_MS = 800;
+const MAX_PROMPT_CHARS = Number(process.env.EVEROS_MEMORY_MAX_PROMPT_CHARS || 1200);
 const MAX_CONTEXT_CHARS = 1800;
 const DEFAULT_PROJECT = process.env.EVEROS_MEMORY_PROJECT || "auto";
 const PROJECT_RULES = parseProjectRules(process.env.EVEROS_CODEX_PROJECT_RULES || "");
-const RECALL_TERMS = splitTerms(
-  process.env.EVEROS_MEMORY_RECALL_TERMS ||
-    "previous,last,time,before,memory,remember,command,config,path,file,template,how,why,之前,上次,记忆,记得,命令,配置,路径,文件,模板,如何,怎么,为什么,部署,环境"
-);
-const ACTION_TERMS = splitTerms(
-  process.env.EVEROS_MEMORY_ACTION_TERMS ||
-    "deploy,login,connect,command,config,path,template,fix,migrate,export,import,build,package,install,start,rollback,sync,search,retrieve,部署,登录,连接,命令,配置,路径,模板,修复,迁移,导出,导入,构建,打包,安装,启动,回滚,同步,检索,召回"
-);
+const ACTION_GROUPS = [
+  ["deploy", "deployment", "部署"],
+  ["login", "log in", "登录", "登陆"],
+  ["connect", "connection", "连接", "链接", "连库"],
+  ["command", "cmd", "命令", "模板"],
+  ["config", "configuration", "配置"],
+  ["path", "路径"],
+  ["fix", "repair", "修复"],
+  ["migrate", "migration", "迁移"],
+  ["export", "dump", "导出"],
+  ["import", "restore", "导入"],
+  ["build", "compile", "构建", "编译"],
+  ["package", "打包"],
+  ["install", "setup", "安装"],
+  ["start", "launch", "启动"],
+  ["rollback", "回滚"],
+  ["sync", "同步"],
+  ["search", "retrieve", "recall", "检索", "召回"],
+].map((group) => group.map((term) => term.toLowerCase()));
+const EXTRA_ACTION_TERMS = splitTerms(process.env.EVEROS_MEMORY_ACTION_TERMS || "");
 
 let chunks = [];
 let done = false;
@@ -116,7 +129,7 @@ function extractPrompt(value) {
     "text",
     "input",
   ]);
-  return typeof preferred === "string" ? preferred.trim() : "";
+  return typeof preferred === "string" ? normalizePrompt(preferred) : "";
 }
 
 function extractCwd(value) {
@@ -158,10 +171,42 @@ function inferProject(prompt, cwd) {
   return DEFAULT_PROJECT;
 }
 
+function normalizePrompt(prompt) {
+  const trimmed = prompt.trim();
+  const markers = [
+    "## My request for Codex:",
+    "## My request for Codex",
+    "My request for Codex:",
+  ];
+  for (const marker of markers) {
+    const index = trimmed.lastIndexOf(marker);
+    if (index >= 0) return trimmed.slice(index + marker.length).trim();
+  }
+  return trimmed;
+}
+
 function shouldRecall(prompt) {
-  if (!prompt || prompt.length > 500) return false;
-  const lowered = prompt.toLowerCase();
-  return RECALL_TERMS.some((term) => lowered.includes(term.toLowerCase()));
+  if (!prompt || prompt.length > MAX_PROMPT_CHARS) return false;
+  if (isInternalGeneratedPrompt(prompt)) return false;
+  if (isTrivialPrompt(prompt)) return false;
+  return true;
+}
+
+function isInternalGeneratedPrompt(prompt) {
+  const lowered = prompt.trim().toLowerCase();
+  return (
+    lowered.startsWith("# overview\n\ngenerate 0 to 3 hyperpersonalized suggestions") ||
+    lowered.startsWith("you are an expert at upholding safety and compliance standards") ||
+    lowered.startsWith("## memory writing agent:")
+  );
+}
+
+function isTrivialPrompt(prompt) {
+  const compact = prompt.replace(/\s+/g, " ").trim().toLowerCase();
+  if (compact.length <= 2) return true;
+  return /^(ok|okay|yes|no|thanks|thank you|done|go on|continue|可以|好的|好|嗯|继续|接着|不了|谢谢|可以，继续|可以,继续)$/.test(
+    compact
+  );
 }
 
 function buildQuery(prompt, project) {
@@ -200,10 +245,17 @@ function isUsefulHit(hit, prompt) {
   if (identifiers.length && !identifiers.some((identifier) => text.includes(identifier))) {
     return false;
   }
-  const actionTerms = ACTION_TERMS.filter((term) =>
+  const actionGroups = matchingActionGroups(prompt);
+  if (actionGroups.length && !actionGroups.some((group) => group.some((term) => text.includes(term)))) {
+    return false;
+  }
+  const extraActionTerms = EXTRA_ACTION_TERMS.filter((term) =>
     prompt.toLowerCase().includes(term.toLowerCase())
   );
-  if (actionTerms.length && !actionTerms.some((term) => text.includes(term.toLowerCase()))) {
+  if (
+    extraActionTerms.length &&
+    !extraActionTerms.some((term) => text.includes(term.toLowerCase()))
+  ) {
     return false;
   }
   if (score >= 8) return true;
@@ -213,6 +265,11 @@ function isUsefulHit(hit, prompt) {
     .filter((token) => token.length >= 4);
   const overlaps = tokens.filter((token) => text.includes(token)).length;
   return score >= 4 && overlaps >= 1;
+}
+
+function matchingActionGroups(prompt) {
+  const lowered = prompt.toLowerCase();
+  return ACTION_GROUPS.filter((group) => group.some((term) => lowered.includes(term)));
 }
 
 function explicitIdentifiers(prompt) {
