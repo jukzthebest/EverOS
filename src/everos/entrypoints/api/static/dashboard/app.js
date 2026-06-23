@@ -214,12 +214,16 @@ function renderSearchResults(data, query) {
   ]
     .filter((item) => item.kind !== "profile" && item.kind !== "buffer");
 
-  const visibleItems = filterAndRankItems(query, items).slice(0, 10);
+  const rankedItems = filterAndRankItems(query, items);
+  const visibleItems = rankedItems.slice(0, 10);
 
   const results = $("#searchResults");
   results.innerHTML = "";
   if (visibleItems.length === 0) {
-    results.textContent = "No results.";
+    const terms = requiredLiteralTerms(query);
+    results.textContent = terms.length
+      ? `No exact matches for: ${terms.join(", ")}.`
+      : "No results.";
     $("#searchPreview").textContent = "No result selected.";
     return;
   }
@@ -268,7 +272,7 @@ function itemMeta(item, query) {
 }
 
 function filterAndRankItems(query, items) {
-  const terms = requiredAsciiTerms(query);
+  const terms = requiredLiteralTerms(query);
   const filtered = terms.length
     ? items.filter((item) =>
         terms.every((term) => searchableItemText(item).includes(term)),
@@ -279,7 +283,7 @@ function filterAndRankItems(query, items) {
   );
 }
 
-function requiredAsciiTerms(query) {
+function requiredLiteralTerms(query) {
   const stopwords = new Set([
     "and",
     "for",
@@ -297,11 +301,17 @@ function requiredAsciiTerms(query) {
     "with",
   ]);
   const terms = [];
-  for (const match of query.matchAll(/[A-Za-z][A-Za-z0-9_./:-]{2,}/g)) {
+  for (const match of query.matchAll(/[A-Za-z0-9][A-Za-z0-9_./:-]{2,}/g)) {
     const term = match[0].toLowerCase();
-    if (!stopwords.has(term) && !terms.includes(term)) terms.push(term);
+    if (!stopwords.has(term) && isLiteralAnchor(term) && !terms.includes(term)) {
+      terms.push(term);
+    }
   }
   return terms;
+}
+
+function isLiteralAnchor(term) {
+  return /\d/.test(term) || /[_./:-]/.test(term);
 }
 
 function searchableItemText(item) {

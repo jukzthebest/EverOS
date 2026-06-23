@@ -142,7 +142,7 @@ def cmd_search(args: argparse.Namespace) -> int:
                 print(f"warning: {exc}", file=sys.stderr)
     hits = filter_precise_identifier_hits(query, hits)
     hits = filter_direct_lookup_hits(query, hits)
-    hits = filter_required_ascii_terms(query, hits)
+    hits = filter_required_literal_terms(query, hits)
     hits.sort(key=lambda hit: boosted_score(hit, query), reverse=True)
     hits = hits[:limit]
     if args.json:
@@ -173,7 +173,9 @@ def resolve_projects(value: str, base_url: str, app_id: str) -> tuple[str, ...]:
     discovered = discover_projects(base_url, app_id)
     if lowered in AUTO_PROJECT_VALUES:
         return discovered or DEFAULT_PROJECTS
-    canonical = {project.lower(): project for project in (*DEFAULT_PROJECTS, *discovered)}
+    canonical = {
+        project.lower(): project for project in (*DEFAULT_PROJECTS, *discovered)
+    }
     return tuple(
         canonical.get(part.strip().lower(), part.strip())
         for part in normalized.split(",")
@@ -495,8 +497,8 @@ def filter_precise_identifier_hits(query: str, hits: list[Hit]) -> list[Hit]:
     return filtered or hits
 
 
-def filter_required_ascii_terms(query: str, hits: list[Hit]) -> list[Hit]:
-    terms = required_ascii_terms(query)
+def filter_required_literal_terms(query: str, hits: list[Hit]) -> list[Hit]:
+    terms = required_literal_terms(query)
     if not terms:
         return hits
     return [
@@ -506,7 +508,7 @@ def filter_required_ascii_terms(query: str, hits: list[Hit]) -> list[Hit]:
     ]
 
 
-def required_ascii_terms(query: str) -> list[str]:
+def required_literal_terms(query: str) -> list[str]:
     stopwords = {
         "and",
         "for",
@@ -524,11 +526,15 @@ def required_ascii_terms(query: str) -> list[str]:
         "with",
     }
     terms = []
-    for match in re.finditer(r"[A-Za-z][A-Za-z0-9_./:-]{2,}", query):
+    for match in re.finditer(r"[A-Za-z0-9][A-Za-z0-9_./:-]{2,}", query):
         term = match.group(0).lower()
-        if term not in stopwords:
+        if term not in stopwords and is_literal_anchor(term):
             terms.append(term)
     return list(dict.fromkeys(terms))
+
+
+def is_literal_anchor(term: str) -> bool:
+    return any(ch.isdigit() for ch in term) or any(ch in term for ch in "_./:-")
 
 
 def searchable_text(hit: Hit) -> str:

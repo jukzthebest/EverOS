@@ -61,6 +61,7 @@ from .dto import (
 )
 from .filters import compile_filters
 from .hierarchy import hierarchy_retrieve_episodes
+from .literal_guard import contains_required_literal_terms, required_literal_terms
 from .shaper import (
     shape_agent_case_from_candidate,
     shape_agent_skill_from_candidate,
@@ -186,6 +187,7 @@ class SearchManager:
                 unprocessed_messages=unprocessed,
             )
 
+        data = _apply_literal_guard(req.query, data)
         return SearchResponse(request_id=request_id, data=data)
 
     # ── Unprocessed buffer ──────────────────────────────────────────
@@ -778,6 +780,80 @@ def _unprocessed_buffer_to_dto(row: UnprocessedBuffer) -> UnprocessedMessageDTO:
         tool_calls=tool_calls,
         tool_call_id=row.tool_call_id,
     )
+
+
+def _apply_literal_guard(query: str, data: SearchData) -> SearchData:
+    terms = required_literal_terms(query)
+    if not terms:
+        return data
+    return data.model_copy(
+        update={
+            "episodes": [
+                item
+                for item in data.episodes
+                if contains_required_literal_terms(_episode_text(item), terms)
+            ],
+            "profiles": [
+                item
+                for item in data.profiles
+                if contains_required_literal_terms(
+                    json.dumps(item.profile_data, ensure_ascii=False), terms
+                )
+            ],
+            "agent_cases": [
+                item
+                for item in data.agent_cases
+                if contains_required_literal_terms(_agent_case_text(item), terms)
+            ],
+            "agent_skills": [
+                item
+                for item in data.agent_skills
+                if contains_required_literal_terms(_agent_skill_text(item), terms)
+            ],
+            "unprocessed_messages": [
+                item
+                for item in data.unprocessed_messages
+                if contains_required_literal_terms(_unprocessed_text(item), terms)
+            ],
+        }
+    )
+
+
+def _episode_text(item: SearchEpisodeItem) -> str:
+    return "\n".join(
+        [
+            item.id,
+            item.session_id,
+            item.subject,
+            item.summary,
+            item.episode,
+        ]
+    )
+
+
+def _agent_case_text(item: SearchAgentCaseItem) -> str:
+    return "\n".join(
+        [
+            item.id,
+            item.session_id,
+            item.task_intent,
+            item.approach,
+            item.key_insight or "",
+        ]
+    )
+
+
+def _agent_skill_text(item: SearchAgentSkillItem) -> str:
+    return "\n".join([item.id, item.name, item.description, item.content])
+
+
+def _unprocessed_text(item: UnprocessedMessageDTO) -> str:
+    content = (
+        item.content
+        if isinstance(item.content, str)
+        else json.dumps(item.content, ensure_ascii=False)
+    )
+    return "\n".join([item.id, item.session_id, item.sender_id, content])
 
 
 def _merge_by_id_max(
