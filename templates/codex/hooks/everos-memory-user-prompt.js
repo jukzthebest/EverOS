@@ -13,7 +13,11 @@ const DEFAULT_PROJECT = process.env.EVEROS_MEMORY_PROJECT || "auto";
 const PROJECT_RULES = parseProjectRules(process.env.EVEROS_CODEX_PROJECT_RULES || "");
 const RECALL_TERMS = splitTerms(
   process.env.EVEROS_MEMORY_RECALL_TERMS ||
-    "previous,last,time,before,memory,remember,command,config,path,file,template,how,why"
+    "previous,last,time,before,memory,remember,command,config,path,file,template,how,why,之前,上次,记忆,记得,命令,配置,路径,文件,模板,如何,怎么,为什么,部署,环境"
+);
+const ACTION_TERMS = splitTerms(
+  process.env.EVEROS_MEMORY_ACTION_TERMS ||
+    "deploy,login,connect,command,config,path,template,fix,migrate,export,import,build,package,install,start,rollback,sync,search,retrieve,部署,登录,连接,命令,配置,路径,模板,修复,迁移,导出,导入,构建,打包,安装,启动,回滚,同步,检索,召回"
 );
 
 let chunks = [];
@@ -38,7 +42,7 @@ function run() {
   const query = buildQuery(prompt, project);
   const result = spawnSync(
     "everos-memory",
-    ["search", query, "--project", project, "--limit", "1", "--json"],
+    ["search", query, "--project", project, "--limit", "3", "--json"],
     {
       encoding: "utf8",
       timeout: COMMAND_TIMEOUT_MS,
@@ -65,7 +69,9 @@ function run() {
     return quiet("json_failed", { project, error: error.message });
   }
 
-  const hit = Array.isArray(hits) ? hits[0] : null;
+  const hit = Array.isArray(hits)
+    ? hits.find((candidate) => isUsefulHit(candidate, prompt))
+    : null;
   if (!hit || !isUsefulHit(hit, prompt)) {
     return quiet("no_useful_hit", {
       project,
@@ -190,6 +196,16 @@ function splitTerms(value) {
 function isUsefulHit(hit, prompt) {
   const score = Number(hit.score || 0);
   const text = `${hit.title || ""}\n${hit.body || ""}`.toLowerCase();
+  const identifiers = explicitIdentifiers(prompt);
+  if (identifiers.length && !identifiers.some((identifier) => text.includes(identifier))) {
+    return false;
+  }
+  const actionTerms = ACTION_TERMS.filter((term) =>
+    prompt.toLowerCase().includes(term.toLowerCase())
+  );
+  if (actionTerms.length && !actionTerms.some((term) => text.includes(term.toLowerCase()))) {
+    return false;
+  }
   if (score >= 8) return true;
   const tokens = prompt
     .toLowerCase()
@@ -199,10 +215,21 @@ function isUsefulHit(hit, prompt) {
   return score >= 4 && overlaps >= 1;
 }
 
+function explicitIdentifiers(prompt) {
+  const seen = new Set();
+  return (prompt.toLowerCase().match(/[a-z0-9][a-z0-9_.:-]{1,}/g) || [])
+    .filter((token) => token.length >= 3 || /\d/.test(token) || token.includes("_"))
+    .filter((token) => {
+      if (seen.has(token)) return false;
+      seen.add(token);
+      return true;
+    });
+}
+
 function formatContext(project, query, hit) {
   const body = clip(extractAnswerContext(String(hit.body || "")), MAX_CONTEXT_CHARS);
   return [
-    "EverOS pre-recall:",
+    "Silent local context:",
     `source=everos project=${project} confidence=${confidence(hit.score)}`,
     `query=${query}`,
     `hit=[${hit.kind || "memory"}] ${hit.title || hit.item_id || ""}`,
@@ -211,7 +238,7 @@ function formatContext(project, query, hit) {
     "",
     body,
     "",
-    "Rule: use this as local memory context. If it directly answers the request, answer directly; otherwise verify against current evidence.",
+    "Rule: use this silently. Do not mention EverOS, hooks, memory search, skill loading, or retrieval steps. If it directly answers the request, answer directly; otherwise verify against current evidence. Add at most one short source/confidence line when useful.",
   ]
     .filter(Boolean)
     .join("\n");

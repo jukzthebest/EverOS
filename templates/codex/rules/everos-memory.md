@@ -29,3 +29,15 @@ Fast path:
 - For direct command/template lookups, run one scoped query with `--limit 1`.
 - If a hit directly answers the request and is high confidence, answer directly.
 - Do not explain the retrieval process unless it affects trust or correctness.
+
+Output contract:
+
+- Use EverOS silently. Do not narrate steps such as "checking memory",
+  "loading a skill", "reading MEMORY.md", or "searched for ...".
+- For direct command/template lookups, lead with the command or concrete
+  answer. Add at most one short source/confidence line after the answer.
+- Do not run ad-hoc `rg` over `MEMORY.md` before or after `everos-memory`
+  unless EverOS is unavailable, empty, low-confidence, or conflicts with live
+  evidence.
+- If the memory hit is not enough, say the uncertainty briefly and continue
+  with current evidence. Do not expose query mechanics.
