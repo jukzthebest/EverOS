@@ -334,26 +334,42 @@ def hit_json(hit: Hit, query: str) -> dict[str, Any]:
 
 
 def filter_direct_lookup_hits(query: str, hits: list[Hit]) -> list[Hit]:
-    """For command lookups, keep command-like hits first and drop vague noise."""
+    """For direct lookups, prefer hits that contain the named thing and a command block."""
     if not is_direct_lookup_query(query):
         return hits
     identifiers = explicit_identifiers(query)
-    exact_hits = [
-        hit for hit in hits if is_explicit_command_lookup_hit(hit, identifiers)
-    ]
-    if exact_hits:
-        return exact_hits
     filtered = [
-        hit for hit in hits if is_direct_lookup_hit(hit, identifiers)
+        hit for hit in hits
+        if matches_lookup_identifier(hit, identifiers) and is_command_like_hit(hit)
     ]
+    if filtered:
+        lookup_terms = direct_lookup_intent_terms(query)
+        if not lookup_terms:
+            lookup_terms = non_identifier_query_terms(query, identifiers)
+        preferred = [
+            hit for hit in filtered
+            if not lookup_terms or has_term_overlap(hit, lookup_terms)
+        ]
+        if preferred:
+            return preferred
+        return filtered
+    if identifiers:
+        identifier_hits = [
+            hit for hit in hits if matches_lookup_identifier(hit, identifiers)
+        ]
+        if identifier_hits:
+            return identifier_hits
     return filtered or hits
 
 
 def is_direct_lookup_query(query: str) -> bool:
     lowered = query.lower()
     return bool(
-        re.search(r"[a-z0-9_./:-]{3,}", lowered)
-        and re.search(r"(命令|连接|链接|登录|mysql|ssh|curl|kubectl|docker)", lowered)
+        explicit_identifiers(query)
+        and re.search(
+            r"(命令|连接|链接|登录|模板|command|cmd|connect|login|shell|cli)",
+            lowered,
+        )
     )
 
 
@@ -364,39 +380,77 @@ def explicit_identifiers(query: str) -> list[str]:
     ]
 
 
-def is_direct_lookup_hit(hit: Hit, identifiers: list[str]) -> bool:
+def matches_lookup_identifier(hit: Hit, identifiers: list[str]) -> bool:
+    if not identifiers:
+        return True
+    text = searchable_text(hit)
+    return any(identifier in text for identifier in identifiers)
+
+
+def is_command_like_hit(hit: Hit) -> bool:
     text = f"{hit.title}\n{hit.body}".lower()
-    if identifiers and not any(identifier in text for identifier in identifiers):
-        return False
-    command_clues = (
-        "连接命令",
-        "链接命令",
-        "mysql -h",
-        "ssh ",
-        "curl ",
-        "kubectl ",
-        "docker ",
-    )
-    return any(clue in text for clue in command_clues)
-
-
-def is_explicit_command_lookup_hit(hit: Hit, identifiers: list[str]) -> bool:
-    title = hit.title.lower()
-    text = f"{title}\n{hit.body[:1000]}".lower()
-    if identifiers and not any(identifier in text for identifier in identifiers):
-        return False
-    return any(
-        phrase in title
-        or phrase in text[:500]
-        for phrase in (
-            "连接命令",
-            "链接命令",
-            "登录命令",
-            "数据库登录命令",
-            "命令模板",
-            "直接连接",
+    return bool(
+        re.search(r"```(?:bash|sh|shell|zsh|sql|console)?\s*\n", text)
+        or re.search(
+            r"(?m)^\s*(?:\$ ?)?(?:mysql|psql|ssh|scp|curl|kubectl|docker|git|svn|uv|python3?|node|npm|pnpm|yarn|go|make|rg|grep|sed|awk)\b",
+            text,
+        )
+        or re.search(
+            r"\b(select|insert|update|delete|optimize\s+table|alter\s+table|create\s+table)\b",
+            text,
         )
     )
+
+
+def is_direct_lookup_hit(hit: Hit, identifiers: list[str]) -> bool:
+    return matches_lookup_identifier(hit, identifiers) and is_command_like_hit(hit)
+
+
+def non_identifier_query_terms(query: str, identifiers: list[str]) -> list[str]:
+    identifier_set = set(identifiers)
+    stopwords = {
+        "一下",
+        "什么",
+        "如何",
+        "怎么",
+        "给我",
+        "帮我",
+        "the",
+        "how",
+        "what",
+        "please",
+    }
+    return [
+        token
+        for token in query_tokens(query)
+        if token not in identifier_set and token not in stopwords
+    ]
+
+
+def direct_lookup_intent_terms(query: str) -> list[str]:
+    lowered = query.lower()
+    terms = []
+    for term in (
+        "命令",
+        "连接",
+        "链接",
+        "登录",
+        "模板",
+        "command",
+        "cmd",
+        "connect",
+        "login",
+        "shell",
+        "cli",
+    ):
+        if term in lowered:
+            terms.append(term)
+    return terms
+
+
+def has_term_overlap(hit: Hit, terms: list[str]) -> bool:
+    text = searchable_text(hit)
+    return any(term in text for term in terms)
 
 
 def filter_precise_identifier_hits(query: str, hits: list[Hit]) -> list[Hit]:
@@ -471,29 +525,23 @@ def boosted_score(hit: Hit, query: str) -> float:
             boost += 5.0
         if token in body:
             boost += 0.5
-    if any(token in tokens for token in ("连接", "登录", "命令", "mysql")):
-        if hit.kind == "episode":
-            boost += 1.0
-        if "mysql " in body:
-            boost += 2.0
+    if is_direct_lookup_query(query) and is_command_like_hit(hit):
+        boost += 2.0
     return base + boost
 
 
 def query_tokens(query: str) -> list[str]:
-    tokens = [
-        match.group(0).lower()
-        for match in re.finditer(r"[A-Za-z0-9_./:-]{2,}|[\u4e00-\u9fff]{2,}", query)
-    ]
-    expanded: list[str] = []
-    for token in tokens:
-        expanded.append(token)
-        if "数据库" in token:
-            expanded.append("mysql")
-        if "登录" in token or "连接" in token:
-            expanded.extend(["连接", "mysql"])
-        if "命令" in token:
-            expanded.append("命令")
-    return list(dict.fromkeys(expanded))
+    tokens: list[str] = []
+    for match in re.finditer(r"[A-Za-z0-9_./:-]{2,}|[\u4e00-\u9fff]+", query):
+        token = match.group(0).lower()
+        if re.fullmatch(r"[\u4e00-\u9fff]+", token):
+            if len(token) <= 4:
+                tokens.append(token)
+            if len(token) > 2:
+                tokens.extend(token[index : index + 2] for index in range(len(token) - 1))
+            continue
+        tokens.append(token)
+    return list(dict.fromkeys(tokens))
 
 
 def clip(text: str, limit: int) -> str:
