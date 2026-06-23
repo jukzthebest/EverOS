@@ -168,7 +168,8 @@ nohup.out
 
 # Local one-off investigation scripts.
 scripts/*_audit.py
-scripts/*_poc.py
+scripts/*_scratch.py
+scripts/*_experiment.py
 scripts/remap_*_memory_*.py
 
 # Repository media policy: do not commit images, videos, or asset/media folders.
