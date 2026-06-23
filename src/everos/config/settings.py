@@ -118,7 +118,8 @@ class LLMSettings(BaseModel):
     ``base_url``. ``provider="codex_oauth"`` reuses the local Codex
     ChatGPT OAuth token and talks to the ChatGPT Codex backend. Set
     ``provider_chain`` to enable fallback, for example
-    ``["grok_oauth", "codex_oauth", "openai"]``.
+    ``["codex_oauth", "openai"]``. Add ``grok_oauth`` explicitly only when
+    the user wants to spend Grok/SuperGrok quota.
 
     Env binding (via parent ``Settings``):
         EVEROS_LLM__PROVIDER

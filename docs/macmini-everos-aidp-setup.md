@@ -9,7 +9,7 @@
 - EverOS repo：使用当前 fork。
 - 记忆根目录：`~/Obsidian/EverOS-Memory/everos`。
 - 项目域：复用 `AIDP`，用于做题、标注、错题和解题策略。
-- LLM：优先 `grok_oauth -> codex_oauth -> openai` fallback。
+- LLM：默认 `codex_oauth -> openai` fallback；Grok/SuperGrok 只作为手工 opt-in，不默认消耗。
 - Embedding：有便宜 API 就用 DeepInfra/Qwen；没有就先用 `local_hash`。
 - 记忆 Markdown：统一中文输出，配置 `extraction_language = "zh"`。
 - 数据同步：同步 Markdown 本体，不同步 `.index/`；每台机器本地重建 SQLite + LanceDB。
@@ -72,14 +72,11 @@ root = "~/Obsidian/EverOS-Memory/everos"
 timezone = "Asia/Shanghai"
 
 [llm]
-provider_chain = ["grok_oauth", "codex_oauth", "openai"]
-grok_model = "grok-build"
+provider_chain = ["codex_oauth", "openai"]
 codex_model = "gpt-5.5"
 openai_model = "gpt-4o-mini"
 openai_base_url = "https://api.openai.com/v1"
-grok_base_url = "https://cli-chat-proxy.grok.com/v1"
 codex_auth_file = "~/.codex/auth.json"
-grok_auth_file = "~/.grok/auth.json"
 extraction_language = "zh"
 
 [embedding]
@@ -498,7 +495,7 @@ everos-dashboard
 2. 使用 ~/Obsidian/EverOS-Memory/everos 作为 memory root。
 3. 执行 bash scripts/setup_codex_everos_memory.sh。
 4. 检查 ~/.everos/config.toml：
-   - LLM fallback: grok_oauth -> codex_oauth -> openai
+   - LLM fallback: codex_oauth -> openai；默认不加入 grok_oauth，除非我明确确认
    - extraction_language = zh，所有沉淀到 EverOS 的 Markdown 必须中文
    - embedding 先用 local_hash；如果我提供 DeepInfra key，再切 Qwen embedding。
 5. 启动 EverOS 本地 API: 127.0.0.1:8000，并执行 everos-dashboard 打开看板。

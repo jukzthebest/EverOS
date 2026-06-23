@@ -65,10 +65,11 @@ cache_size_kb = 2048
 #   EVEROS_LLM__SERVICE_TIER
 # Or via a ``.env`` file next to the project root (auto-loaded).
 provider = "openai"
-# provider_chain = ["grok_oauth", "codex_oauth", "openai"]
+# provider_chain = ["codex_oauth", "openai"]
 model = "gpt-4o-mini"
 # openai_model = "gpt-4o-mini"
 # codex_model = "gpt-5.5"
+# Grok is optional and should only be added to provider_chain manually.
 # grok_model = "grok-build"
 # api_key = ""
 # base_url = ""

@@ -39,14 +39,11 @@ root = "$MEMORY_ROOT"
 timezone = "Asia/Shanghai"
 
 [llm]
-provider_chain = ["grok_oauth", "codex_oauth", "openai"]
-grok_model = "grok-build"
+provider_chain = ["codex_oauth", "openai"]
 codex_model = "gpt-5.5"
 openai_model = "gpt-4o-mini"
 openai_base_url = "https://api.openai.com/v1"
-grok_base_url = "https://cli-chat-proxy.grok.com/v1"
 codex_auth_file = "~/.codex/auth.json"
-grok_auth_file = "~/.grok/auth.json"
 extraction_language = "zh"
 
 [embedding]

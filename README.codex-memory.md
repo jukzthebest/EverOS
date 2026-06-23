@@ -4,7 +4,7 @@
 
 ## 包含什么
 
-- OAuth / fallback LLM：`grok_oauth -> codex_oauth -> openai`。
+- OAuth / fallback LLM：默认 `codex_oauth -> openai`。Grok 可手工加入，但不默认使用。
 - 本地 embedding 兜底：`local_hash`，没有 API key 也能启动和建索引。
 - Dashboard：`http://127.0.0.1:8000/dashboard/`。
 - Codex session 导入：`everos import codex-structured`，直接写 结构化中文 Markdown。
