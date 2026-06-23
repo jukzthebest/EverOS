@@ -336,7 +336,9 @@ nav {
 
 .search-bar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 104px 156px 136px 118px auto;
+  grid-template-columns:
+    minmax(260px, 1fr) 104px minmax(120px, 150px) 120px minmax(150px, 190px)
+    118px auto;
   gap: 8px;
   padding: 10px;
   border: 1px solid var(--line);
@@ -423,9 +425,16 @@ textarea:hover {
 }
 
 .result-item span,
+.result-item small,
 .tree small {
   color: var(--muted);
   font-size: 12px;
+}
+
+.result-item small {
+  display: block;
+  margin-top: 6px;
+  line-height: 1.45;
 }
 
 .preview,

@@ -85,16 +85,38 @@
         </header>
 
         <form id="searchForm" class="search-bar">
-          <input id="searchQuery" type="search" placeholder="Search memories" />
-          <select id="searchOwnerType" aria-label="Owner type">
+          <input
+            id="searchQuery"
+            type="search"
+            placeholder="Query: command, file path, incident keyword"
+            title="Search query. Use command names, environment names, file paths, or incident keywords."
+          />
+          <select id="searchOwnerType" aria-label="Owner type" title="Owner scope to search">
             <option value="both">Both</option>
             <option value="user">User</option>
             <option value="agent">Agent</option>
           </select>
-          <input id="searchOwnerId" value="user" aria-label="Owner id" />
-          <input id="searchAppId" value="codex" aria-label="App id" />
-          <input id="searchProjectId" value="default" aria-label="Project" />
-          <select id="searchMethod" aria-label="Search method">
+          <input
+            id="searchOwnerId"
+            value="user"
+            placeholder="Owner: user/codex"
+            aria-label="Owner id"
+            title="Owner id. Use user for user memory, codex for agent memory."
+          />
+          <input
+            id="searchAppId"
+            value="codex"
+            placeholder="App: codex"
+            aria-label="App id"
+            title="App namespace, usually codex."
+          />
+          <input
+            id="searchProjectId"
+            placeholder="Project: blank/auto/all or project-id"
+            aria-label="Project"
+            title="Leave blank, auto, all, or * to search all discovered projects. Use comma-separated names to limit scope."
+          />
+          <select id="searchMethod" aria-label="Search method" title="Retrieval method. keyword is fastest; hybrid uses vector plus keyword when configured.">
             <option value="keyword">keyword</option>
             <option value="hybrid">hybrid</option>
             <option value="vector">vector</option>

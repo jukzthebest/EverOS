@@ -8,6 +8,8 @@ and cascade maintenance without widening the public memory API contract.
 from __future__ import annotations
 
 import asyncio
+import getpass
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -40,6 +42,10 @@ class DashboardHealth(BaseModel):
     openai_model: str | None
     embedding_provider: str
     embedding_model: str | None
+    default_user_id: str
+    default_agent_id: str
+    default_app_id: str
+    default_projects: list[str]
 
 
 class TreeNode(BaseModel):
@@ -92,6 +98,10 @@ async def health() -> DashboardHealth:
         openai_model=settings.llm.openai_model,
         embedding_provider=settings.embedding.provider,
         embedding_model=settings.embedding.model,
+        default_user_id=_default_user_id(),
+        default_agent_id=os.environ.get("EVEROS_MEMORY_AGENT_ID", "codex"),
+        default_app_id=os.environ.get("EVEROS_MEMORY_APP_ID", "codex"),
+        default_projects=_default_projects(),
     )
 
 
@@ -202,6 +212,19 @@ def _count_memory_files(root: Path) -> tuple[int, int]:
         if len(rel.parts) >= 2:
             scopes.add((rel.parts[0], rel.parts[1]))
     return md_count, len(scopes)
+
+
+def _default_user_id() -> str:
+    return os.environ.get("EVEROS_MEMORY_USER_ID") or getpass.getuser() or "user"
+
+
+def _default_projects() -> list[str]:
+    projects = [
+        project.strip()
+        for project in os.environ.get("EVEROS_MEMORY_PROJECTS", "default").split(",")
+        if project.strip()
+    ]
+    return projects or ["default"]
 
 
 def _build_tree(

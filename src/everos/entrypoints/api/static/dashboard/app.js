@@ -5,10 +5,13 @@ const state = {
   fileTree: null,
   fileMode: "docs",
   fileFilter: "",
+  searchDefaultsApplied: false,
 };
 
-const DEFAULT_USER_ID = "user";
-const DEFAULT_AGENT_ID = "codex";
+let DEFAULT_USER_ID = "user";
+let DEFAULT_AGENT_ID = "codex";
+let DEFAULT_APP_ID = "codex";
+const AUTO_PROJECT_VALUES = new Set(["", "auto", "all", "*"]);
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -68,6 +71,7 @@ async function loadOverview() {
     $("#embeddingModel").textContent = data.embedding_model
       ? `${data.embedding_provider}:${data.embedding_model}`
       : data.embedding_provider;
+    applySearchDefaults(data);
   } catch (error) {
     setServerStatus(false, "Error");
     $("#memoryRoot").textContent = error.message;
@@ -80,53 +84,60 @@ async function runSearch(event) {
   if (!query) return;
 
   const ownerType = $("#searchOwnerType").value;
+  const appId = $("#searchAppId").value.trim() || DEFAULT_APP_ID;
+  const results = $("#searchResults");
+  results.textContent = "Resolving projects...";
+  $("#searchPreview").textContent = "";
+  const projectIds = await resolveSearchProjects(appId);
   const basePayload = {
     query,
-    app_id: $("#searchAppId").value.trim() || "codex",
-    project_id: $("#searchProjectId").value.trim() || "default",
+    app_id: appId,
     method: $("#searchMethod").value,
     top_k: 20,
   };
 
-  const results = $("#searchResults");
-  results.textContent = "Searching...";
-  $("#searchPreview").textContent = "";
+  results.textContent =
+    projectIds.length > 1 ? `Searching ${projectIds.length} projects...` : "Searching...";
 
   try {
-    const response = await runSearchRequests(basePayload, ownerType);
+    const response = await runSearchRequests(basePayload, ownerType, projectIds);
     renderSearchResults(response, query);
   } catch (error) {
     results.textContent = error.message;
   }
 }
 
-async function runSearchRequests(basePayload, ownerType) {
+async function runSearchRequests(basePayload, ownerType, projectIds) {
   const ownerId = $("#searchOwnerId").value.trim();
   const requests = [];
-  if (ownerType === "user" || ownerType === "both") {
-    requests.push(
-      request("/api/v1/memory/search", {
-        method: "POST",
-        body: JSON.stringify({
-          ...basePayload,
-          include_profile: true,
-          user_id: ownerId || DEFAULT_USER_ID,
+  for (const projectId of projectIds) {
+    if (ownerType === "user" || ownerType === "both") {
+      requests.push(
+        request("/api/v1/memory/search", {
+          method: "POST",
+          body: JSON.stringify({
+            ...basePayload,
+            project_id: projectId,
+            include_profile: true,
+            user_id: ownerId || DEFAULT_USER_ID,
+          }),
         }),
-      }),
-    );
-  }
-  if (ownerType === "agent" || ownerType === "both") {
-    requests.push(
-      request("/api/v1/memory/search", {
-        method: "POST",
-        body: JSON.stringify({
-          ...basePayload,
-          include_profile: false,
-          agent_id:
-            ownerType === "agent" ? ownerId || DEFAULT_AGENT_ID : DEFAULT_AGENT_ID,
+      );
+    }
+    if (ownerType === "agent" || ownerType === "both") {
+      requests.push(
+        request("/api/v1/memory/search", {
+          method: "POST",
+          body: JSON.stringify({
+            ...basePayload,
+            project_id: projectId,
+            include_profile: false,
+            agent_id:
+              ownerType === "agent" ? ownerId || DEFAULT_AGENT_ID : DEFAULT_AGENT_ID,
+          }),
         }),
-      }),
-    );
+      );
+    }
   }
   const responses = await Promise.all(requests);
   return mergeSearchData(responses.map((response) => response.data));
@@ -134,12 +145,24 @@ async function runSearchRequests(basePayload, ownerType) {
 
 function mergeSearchData(chunks) {
   return {
-    episodes: chunks.flatMap((item) => item.episodes || []),
-    profiles: chunks.flatMap((item) => item.profiles || []),
-    agent_cases: chunks.flatMap((item) => item.agent_cases || []),
-    agent_skills: chunks.flatMap((item) => item.agent_skills || []),
-    unprocessed_messages: chunks.flatMap((item) => item.unprocessed_messages || []),
+    episodes: dedupeSearchItems(chunks.flatMap((item) => item.episodes || [])),
+    profiles: dedupeSearchItems(chunks.flatMap((item) => item.profiles || [])),
+    agent_cases: dedupeSearchItems(chunks.flatMap((item) => item.agent_cases || [])),
+    agent_skills: dedupeSearchItems(chunks.flatMap((item) => item.agent_skills || [])),
+    unprocessed_messages: dedupeSearchItems(
+      chunks.flatMap((item) => item.unprocessed_messages || []),
+    ),
   };
+}
+
+function dedupeSearchItems(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = item.id || item.message_id || item.session_id || JSON.stringify(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function renderSearchResults(data, query) {
@@ -150,6 +173,7 @@ function renderSearchResults(data, query) {
       score: asNumber(item.score),
       meta: "",
       body: item.episode,
+      project: item.project_id,
       raw: item,
     })),
     ...data.profiles.map((item) => ({
@@ -158,6 +182,7 @@ function renderSearchResults(data, query) {
       score: null,
       meta: "profile",
       body: JSON.stringify(item.profile_data, null, 2),
+      project: item.project_id,
       raw: item,
     })),
     ...data.agent_cases.map((item) => ({
@@ -166,6 +191,7 @@ function renderSearchResults(data, query) {
       score: asNumber(item.score),
       meta: "",
       body: [item.approach, item.key_insight].filter(Boolean).join("\n\n"),
+      project: item.project_id,
       raw: item,
     })),
     ...data.agent_skills.map((item) => ({
@@ -173,6 +199,7 @@ function renderSearchResults(data, query) {
       title: item.description || item.name || item.id,
       score: asNumber(item.score),
       body: item.content || item.description,
+      project: item.project_id,
       raw: item,
     })),
     ...data.unprocessed_messages.map((item) => ({
@@ -181,6 +208,7 @@ function renderSearchResults(data, query) {
       score: null,
       meta: `buffer · ${item.session_id}`,
       body: typeof item.content === "string" ? item.content : JSON.stringify(item.content),
+      project: item.project_id,
       raw: item,
     })),
   ]
@@ -192,14 +220,19 @@ function renderSearchResults(data, query) {
   results.innerHTML = "";
   if (visibleItems.length === 0) {
     results.textContent = "No results.";
+    $("#searchPreview").textContent = "No result selected.";
     return;
   }
   for (const item of visibleItems) {
     const button = document.createElement("button");
     button.className = "result-item";
-    button.innerHTML = `<strong></strong><span></span>`;
+    button.innerHTML = `<strong></strong><span></span><small></small>`;
     button.querySelector("strong").textContent = item.title;
     button.querySelector("span").textContent = itemMeta(item, query);
+    const excerpt = matchExcerpt(item.body, query);
+    const excerptElement = button.querySelector("small");
+    excerptElement.textContent = excerpt;
+    excerptElement.hidden = !excerpt;
     button.addEventListener("click", () => {
       document
         .querySelectorAll(".result-item")
@@ -226,6 +259,7 @@ function asNumber(value) {
 
 function itemMeta(item, query) {
   const parts = [item.kind];
+  if (item.project) parts.push(item.project);
   if (item.raw?.session_id) parts.push(item.raw.session_id);
   const rank = boostedScore(item, query);
   if (rank != null) parts.push(`score ${score(rank)}`);
@@ -305,6 +339,25 @@ function queryTokens(query) {
   return [...new Set(tokens)];
 }
 
+function matchExcerpt(body, query) {
+  const text = String(body || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const lower = text.toLowerCase();
+  const tokens = queryTokens(query).sort((left, right) => right.length - left.length);
+  const index = tokens.map((token) => lower.indexOf(token)).find((value) => value >= 0);
+  if (index == null || index < 0) return truncateText(text, 180);
+  const start = Math.max(0, index - 70);
+  const end = Math.min(text.length, index + 140);
+  return `${start > 0 ? "..." : ""}${text.slice(start, end)}${
+    end < text.length ? "..." : ""
+  }`;
+}
+
+function truncateText(text, maxLength) {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3)}...`;
+}
+
 function syncOwnerId() {
   const ownerType = $("#searchOwnerType").value;
   if (ownerType === "agent") {
@@ -312,6 +365,89 @@ function syncOwnerId() {
   } else if (ownerType === "user") {
     $("#searchOwnerId").value = DEFAULT_USER_ID;
   }
+}
+
+function applySearchDefaults(data) {
+  DEFAULT_USER_ID =
+    data.default_user_id || inferUserIdFromMemoryRoot(data.memory_root) || DEFAULT_USER_ID;
+  DEFAULT_AGENT_ID = data.default_agent_id || DEFAULT_AGENT_ID;
+  DEFAULT_APP_ID = data.default_app_id || DEFAULT_APP_ID;
+  if (state.searchDefaultsApplied) return;
+
+  const ownerType = $("#searchOwnerType").value;
+  $("#searchOwnerId").value =
+    ownerType === "agent" ? DEFAULT_AGENT_ID : DEFAULT_USER_ID;
+  $("#searchAppId").value = DEFAULT_APP_ID;
+  const exampleProject =
+    (data.default_projects || []).find((project) => project && project !== "default") ||
+    "project-id";
+  $("#searchProjectId").placeholder = `Project: auto/all/${exampleProject}`;
+  $("#searchProjectId").value = "";
+  state.searchDefaultsApplied = true;
+}
+
+function inferUserIdFromMemoryRoot(path) {
+  const match = String(path || "").match(/^\/(?:Users|home)\/([^/]+)/);
+  return match?.[1] || "";
+}
+
+async function resolveSearchProjects(appId) {
+  const raw = $("#searchProjectId").value.trim();
+  const discovered = await discoverSearchProjects(appId);
+  if (AUTO_PROJECT_VALUES.has(raw.toLowerCase())) {
+    return discovered.length ? discovered : ["default"];
+  }
+  return parseProjectIds(raw, discovered);
+}
+
+async function discoverSearchProjects(appId) {
+  try {
+    const root = state.fileTree || (await loadSearchTree());
+    const projectsNode = findTreeNode(root, (node) => {
+      const path = normalizeTreePath(node.path).toLowerCase();
+      return node.type === "dir" && path === `${appId}/projects`.toLowerCase();
+    });
+    return (projectsNode?.children || [])
+      .filter((child) => child.type === "dir")
+      .map((child) => child.name)
+      .sort((left, right) => left.localeCompare(right));
+  } catch (error) {
+    return [];
+  }
+}
+
+async function loadSearchTree() {
+  const data = await request("/api/v1/dashboard/tree?max_depth=4&include_hidden=false");
+  if (!state.fileTree) state.fileTree = data;
+  return data;
+}
+
+function parseProjectIds(raw, discovered) {
+  const canonical = new Map(discovered.map((project) => [project.toLowerCase(), project]));
+  const projects = raw
+    .split(",")
+    .flatMap((value) => {
+      const project = value.trim();
+      if (AUTO_PROJECT_VALUES.has(project.toLowerCase())) return discovered;
+      return project ? [canonical.get(project.toLowerCase()) || project] : [];
+    });
+  const uniqueProjects = [...new Set(projects)];
+  return uniqueProjects.length ? uniqueProjects : ["default"];
+}
+
+function findTreeNode(node, predicate) {
+  if (predicate(node)) return node;
+  for (const child of node.children || []) {
+    const match = findTreeNode(child, predicate);
+    if (match) return match;
+  }
+  return null;
+}
+
+function normalizeTreePath(path) {
+  return String(path || "")
+    .replace(/^\.\//, "")
+    .replace(/\/+$/, "");
 }
 
 async function loadTree() {
