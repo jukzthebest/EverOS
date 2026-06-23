@@ -1,7 +1,7 @@
 # Example user-level config — copy to ~/.everos/config.toml.
 #
 #     cp config.example.toml ~/.everos/config.toml
-#     $EDITOR ~/.everos/config.toml   # fill in api_key / base_url
+#     $EDITOR ~/.everos/config.toml   # fill in provider model / base_url
 #
 # Override priority (low → high):
 #
@@ -63,11 +63,13 @@ extraction_language = "auto"
 # extraction_language = "auto"
 
 # ── Embedding ─────────────────────────────────────────
+# OpenAI-compatible /embeddings endpoint. Keep API keys in environment
+# variables, not in this file:
+#   EVEROS_EMBEDDING__API_KEY=<secret>
 [embedding]
 provider = "openai"
-model    = "Qwen/Qwen3-Embedding-4B"
-api_key  = "..."
-base_url = "https://api.deepinfra.com/v1/openai"
+model    = "embedding-model"
+base_url = "https://vendor.example/v1"
 # Runtime knobs (defaults shown):
 timeout_seconds = 30.0
 max_retries     = 3
@@ -83,10 +85,14 @@ max_concurrent  = 5
 # base_url = ""
 
 # ── Rerank ────────────────────────────────────────────
+# OpenAI-compatible /rerank endpoint. Use provider="vllm" for servers
+# accepting {model, query, documents, top_n}. Keep API keys in environment
+# variables, not in this file:
+#   EVEROS_RERANK__API_KEY=<secret>
 [rerank]
-model    = "Qwen/Qwen3-Reranker-4B"
-api_key  = "..."
-base_url = "https://api.deepinfra.com/v1/inference"
+provider = "vllm"
+model    = "rerank-model"
+base_url = "https://vendor.example/v1"
 timeout_seconds = 30.0
 max_retries     = 3
 batch_size      = 10

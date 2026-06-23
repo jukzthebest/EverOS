@@ -12,7 +12,8 @@ Request body:
     {
         "model":     "<model>",
         "query":     "<query>",
-        "documents": ["<doc 1>", "<doc 2>", ...]
+        "documents": ["<doc 1>", "<doc 2>", ...],
+        "top_n":     <number of documents in this request>
     }
 
 Response body:
@@ -119,6 +120,7 @@ class VllmRerankProvider:
             "model": self._model,
             "query": query,
             "documents": documents,
+            "top_n": len(documents),
         }
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if self._api_key:

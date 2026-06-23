@@ -46,9 +46,13 @@ async def test_empty_documents_short_circuits(monkeypatch: pytest.MonkeyPatch) -
 
 async def test_url_and_sort_desc(monkeypatch: pytest.MonkeyPatch) -> None:
     seen_urls: list[str] = []
+    seen_bodies: list[dict[str, object]] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
+        import json
+
         seen_urls.append(str(req.url))
+        seen_bodies.append(json.loads(req.content))
         return _ok_response(
             [
                 {"index": 0, "relevance_score": 0.1},
@@ -62,6 +66,7 @@ async def test_url_and_sort_desc(monkeypatch: pytest.MonkeyPatch) -> None:
     results = await p.rerank("q", ["a", "b", "c"])
     # Trailing slash stripped, ``/rerank`` appended.
     assert seen_urls == ["http://localhost:8000/v1/rerank"]
+    assert seen_bodies[0]["top_n"] == 3
     assert [r.index for r in results] == [1, 2, 0]
 
 
