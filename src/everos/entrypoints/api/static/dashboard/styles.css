@@ -469,19 +469,51 @@ pre {
   padding-left: 0;
 }
 
-.tree button {
+.tree button,
+.tree summary {
   min-height: 28px;
   color: #3f3f46;
   font-size: 12px;
 }
 
-.tree button:disabled {
-  cursor: default;
-  color: var(--faint);
+.tree summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  border-radius: 7px;
+  padding: 6px 8px;
+  cursor: pointer;
+  list-style: none;
 }
 
-.tree button:disabled:hover {
-  background: transparent;
+.tree summary::-webkit-details-marker {
+  display: none;
+}
+
+.tree summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+
+.tree details[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.tree summary:hover,
+.tree button:hover {
+  background: var(--hover);
+}
+
+.tree .empty-dir {
+  display: block;
+  padding: 4px 8px 8px 21px;
+  color: var(--faint);
 }
 
 .editor {

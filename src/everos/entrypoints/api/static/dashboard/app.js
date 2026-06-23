@@ -308,7 +308,7 @@ async function loadTree() {
   const tree = $("#fileTree");
   tree.textContent = "Loading...";
   try {
-    const data = await request("/api/v1/dashboard/tree?max_depth=6&include_hidden=true");
+    const data = await request("/api/v1/dashboard/tree?max_depth=10&include_hidden=true");
     tree.innerHTML = "";
     tree.append(renderTree(data));
   } catch (error) {
@@ -316,26 +316,45 @@ async function loadTree() {
   }
 }
 
-function renderTree(node) {
+function renderTree(node, depth = 0) {
   const ul = document.createElement("ul");
+  ul.append(renderTreeItem(node, depth));
+  return ul;
+}
+
+function renderTreeItem(node, depth) {
   const li = document.createElement("li");
-  const button = document.createElement("button");
-  button.textContent = node.type === "dir" ? `${node.name}/` : node.name;
+
   if (node.type === "file") {
+    const button = document.createElement("button");
+    button.className = "file-row";
+    button.textContent = node.name;
     button.addEventListener("click", () => loadFile(node.path));
-  } else {
-    button.disabled = true;
+    li.append(button);
+    return li;
   }
-  li.append(button);
+
+  const details = document.createElement("details");
+  details.open = depth < 2;
+  const summary = document.createElement("summary");
+  summary.textContent = `${node.name}/`;
+  details.append(summary);
+
   if (node.children?.length) {
     const childList = document.createElement("ul");
     for (const child of node.children) {
-      childList.append(...renderTree(child).children);
+      childList.append(renderTreeItem(child, depth + 1));
     }
-    li.append(childList);
+    details.append(childList);
+  } else {
+    const empty = document.createElement("small");
+    empty.className = "empty-dir";
+    empty.textContent = "Empty";
+    details.append(empty);
   }
-  ul.append(li);
-  return ul;
+
+  li.append(details);
+  return li;
 }
 
 async function loadFile(path) {
