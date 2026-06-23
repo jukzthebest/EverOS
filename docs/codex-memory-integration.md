@@ -29,8 +29,8 @@ Override these with environment variables before running setup:
 ```bash
 export EVEROS_MEMORY_ROOT="$HOME/.everos/my-memory"
 export EVEROS_LAUNCH_AGENT_LABEL="com.example.everos-memory"
-export EVEROS_MEMORY_PROJECTS="work,study,default"
-export EVEROS_CODEX_PROJECT_RULES="my-repo=work,leetcode=study"
+export EVEROS_MEMORY_PROJECTS="default"
+export EVEROS_CODEX_PROJECT_RULES="<repo-regex>=<project-id>"
 bash scripts/setup_codex_everos_memory.sh
 ```
 
@@ -87,7 +87,7 @@ export EVEROS_MEMORY_DIRECT_LOOKUP_TERMS="command,cmd,connect,login,shell,cli"
 Project routing syntax:
 
 ```bash
-export EVEROS_CODEX_PROJECT_RULES="repo-name=project-a,another-repo=project-b"
+export EVEROS_CODEX_PROJECT_RULES="<repo-regex>=<project-id>,<repo-regex>=<project-id>"
 ```
 
 Each rule is `regex=project_id`. The first regex matching the prompt or current
