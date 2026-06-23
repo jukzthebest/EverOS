@@ -122,7 +122,17 @@
         </header>
 
         <div class="split files-layout">
-          <section class="panel tree" id="fileTree"></section>
+          <section class="panel file-browser">
+            <div class="file-toolbar">
+              <input id="fileFilter" type="search" placeholder="Filter documents" aria-label="Filter documents" />
+              <div class="segmented" aria-label="File browser mode">
+                <button class="active" type="button" data-file-mode="docs">Docs</button>
+                <button type="button" data-file-mode="tree">Tree</button>
+              </div>
+            </div>
+            <div class="file-list" id="fileList"></div>
+            <div class="tree" id="fileTree" hidden></div>
+          </section>
           <section class="panel editor">
             <div class="editor-head">
               <span id="activeFile">No file selected</span>

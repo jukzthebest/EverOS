@@ -2,6 +2,9 @@ const state = {
   activeFile: null,
   fileDirty: false,
   previewMode: false,
+  fileTree: null,
+  fileMode: "docs",
+  fileFilter: "",
 };
 
 const DEFAULT_USER_ID = "user";
@@ -312,15 +315,112 @@ function syncOwnerId() {
 }
 
 async function loadTree() {
-  const tree = $("#fileTree");
-  tree.textContent = "Loading...";
+  $("#fileList").textContent = "Loading...";
+  $("#fileTree").textContent = "";
   try {
     const data = await request("/api/v1/dashboard/tree?max_depth=10&include_hidden=true");
-    tree.innerHTML = "";
-    tree.append(renderTree(data));
+    state.fileTree = data;
+    renderFileBrowser();
   } catch (error) {
-    tree.textContent = error.message;
+    $("#fileList").textContent = error.message;
   }
+}
+
+function renderFileBrowser() {
+  const list = $("#fileList");
+  const tree = $("#fileTree");
+  document.querySelectorAll("[data-file-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.fileMode === state.fileMode);
+  });
+  list.hidden = state.fileMode !== "docs";
+  tree.hidden = state.fileMode !== "tree";
+  if (!state.fileTree) return;
+  if (state.fileMode === "tree") {
+    tree.innerHTML = "";
+    tree.append(renderTree(state.fileTree));
+    markActiveFile();
+    return;
+  }
+  renderDocumentList(state.fileTree);
+}
+
+function renderDocumentList(root) {
+  const list = $("#fileList");
+  const query = state.fileFilter.trim().toLowerCase();
+  const documents = flattenDocuments(root).filter((item) => {
+    if (!query) return true;
+    return `${item.name}\n${item.path}`.toLowerCase().includes(query);
+  });
+  list.innerHTML = "";
+  if (!documents.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-list";
+    empty.textContent = "No documents.";
+    list.append(empty);
+    return;
+  }
+  for (const item of documents) {
+    const button = document.createElement("button");
+    button.className = "doc-row";
+    button.title = item.path;
+    button.dataset.path = item.path;
+
+    const title = document.createElement("strong");
+    title.textContent = compactDocumentName(item.name);
+    const pathLine = document.createElement("span");
+    pathLine.textContent = documentPathLabel(item.path);
+
+    button.append(title, pathLine);
+    button.addEventListener("click", () => loadFile(item.path));
+    list.append(button);
+  }
+  markActiveFile();
+}
+
+function flattenDocuments(node, items = []) {
+  if (node.type === "file") {
+    if (isDocumentFile(node.name)) {
+      items.push({
+        name: node.name,
+        path: node.path,
+        modifiedAt: node.modified_at || 0,
+      });
+    }
+    return items;
+  }
+  for (const child of node.children || []) {
+    flattenDocuments(child, items);
+  }
+  return items.sort((left, right) => {
+    if (right.modifiedAt !== left.modifiedAt) return right.modifiedAt - left.modifiedAt;
+    return left.path.localeCompare(right.path);
+  });
+}
+
+function isDocumentFile(name) {
+  return /\.(md|markdown|toml|txt)$/i.test(name);
+}
+
+function compactDocumentName(name) {
+  return name.replace(/\.(md|markdown|toml|txt)$/i, "");
+}
+
+function documentPathLabel(path) {
+  const parts = path.split("/").filter(Boolean);
+  const folders = parts.slice(0, -1);
+  if (folders.length <= 3) return folders.join(" / ") || "root";
+  return `... / ${folders.slice(-3).join(" / ")}`;
+}
+
+function setFileMode(mode) {
+  state.fileMode = mode;
+  renderFileBrowser();
+}
+
+function updateFileFilter(value) {
+  state.fileFilter = value;
+  if (state.fileMode !== "docs") state.fileMode = "docs";
+  renderFileBrowser();
 }
 
 function renderTree(node, depth = 0) {
@@ -335,6 +435,7 @@ function renderTreeItem(node, depth) {
   if (node.type === "file") {
     const button = document.createElement("button");
     button.className = "file-row";
+    button.dataset.path = node.path;
     button.textContent = node.name;
     button.addEventListener("click", () => loadFile(node.path));
     li.append(button);
@@ -342,7 +443,7 @@ function renderTreeItem(node, depth) {
   }
 
   const details = document.createElement("details");
-  details.open = depth < 2;
+  details.open = depth < 1;
   const summary = document.createElement("summary");
   summary.textContent = `${node.name}/`;
   details.append(summary);
@@ -374,6 +475,7 @@ async function loadFile(path) {
     $("#fileEditor").value = data.content;
     $("#saveFile").disabled = !data.editable;
     updatePreviewState();
+    markActiveFile();
   } catch (error) {
     $("#activeFile").textContent = error.message;
     $("#fileEditor").value = "";
@@ -381,7 +483,14 @@ async function loadFile(path) {
     state.activeFile = null;
     state.previewMode = false;
     updatePreviewState();
+    markActiveFile();
   }
+}
+
+function markActiveFile() {
+  document.querySelectorAll("[data-path]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.path === state.activeFile);
+  });
 }
 
 function updatePreviewState() {
@@ -557,6 +666,10 @@ $("#refreshOverview").addEventListener("click", loadOverview);
 $("#searchOwnerType").addEventListener("change", syncOwnerId);
 $("#searchForm").addEventListener("submit", runSearch);
 $("#refreshTree").addEventListener("click", loadTree);
+$("#fileFilter").addEventListener("input", (event) => updateFileFilter(event.target.value));
+document.querySelectorAll("[data-file-mode]").forEach((button) => {
+  button.addEventListener("click", () => setFileMode(button.dataset.fileMode));
+});
 $("#saveFile").addEventListener("click", saveFile);
 $("#togglePreview").addEventListener("click", togglePreview);
 $("#fileEditor").addEventListener("input", () => {

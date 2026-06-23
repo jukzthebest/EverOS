@@ -387,7 +387,7 @@ textarea:hover {
 .result-item,
 .tree button {
   width: 100%;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
   text-align: left;
@@ -455,14 +455,126 @@ pre {
 }
 
 .files-layout {
-  grid-template-columns: clamp(280px, 28vw, 420px) minmax(0, 1fr);
+  grid-template-columns: clamp(320px, 32vw, 460px) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
 
-.tree {
+.file-browser {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   padding: 8px;
   min-height: 0;
+  overflow: hidden;
+}
+
+.file-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 0 0 8px;
+}
+
+.file-toolbar input {
+  min-width: 0;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--panel-subtle);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.segmented {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f6f6f7;
+}
+
+.segmented button {
+  height: 26px;
+  min-width: 48px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.segmented button.active {
+  background: #fff;
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.file-list,
+.tree {
+  min-height: 0;
+  overflow: auto;
+}
+
+.file-list {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.doc-row {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 8px 9px;
+}
+
+.doc-row:hover {
+  background: var(--hover);
+}
+
+.doc-row.active,
+.file-row.active {
+  border-color: var(--line-strong);
+  background: var(--selected);
+}
+
+.doc-row strong,
+.doc-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-row strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
+.doc-row span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.empty-list {
+  margin: 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .tree ul {
