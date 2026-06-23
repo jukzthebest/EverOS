@@ -31,6 +31,8 @@ DEFAULT_PROJECTS = tuple(
     for project in os.environ.get("EVEROS_MEMORY_PROJECTS", "default").split(",")
     if project.strip()
 ) or ("default",)
+AUTO_PROJECT_VALUES = {"", "auto", "all", "*"}
+QUERY_EDGE_PUNCTUATION = " \t\r\n,，、;；:：.!！?？"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DIRECT_LOOKUP_TERMS = tuple(
     term.strip()
@@ -110,7 +112,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    projects = resolve_projects(args.project)
+    query = normalize_query(args.query)
+    projects = resolve_projects(args.project, args.base_url, args.app_id)
     owners = ("user", "agent") if args.owner == "both" else (args.owner,)
     limit = max(1, min(args.limit, 50))
     recall_limit = max(limit * 4, 20)
@@ -121,7 +124,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             pool.submit(
                 search_scope,
                 args.base_url,
-                args.query,
+                query,
                 project_id,
                 owner,
                 args.user_id,
@@ -137,21 +140,21 @@ def cmd_search(args: argparse.Namespace) -> int:
                 hits.extend(future.result())
             except RuntimeError as exc:
                 print(f"warning: {exc}", file=sys.stderr)
-    hits = filter_precise_identifier_hits(args.query, hits)
-    hits = filter_direct_lookup_hits(args.query, hits)
-    hits = filter_required_ascii_terms(args.query, hits)
-    hits.sort(key=lambda hit: boosted_score(hit, args.query), reverse=True)
+    hits = filter_precise_identifier_hits(query, hits)
+    hits = filter_direct_lookup_hits(query, hits)
+    hits = filter_required_ascii_terms(query, hits)
+    hits.sort(key=lambda hit: boosted_score(hit, query), reverse=True)
     hits = hits[:limit]
     if args.json:
         print(
             json.dumps(
-                [hit_json(hit, args.query) for hit in hits],
+                [hit_json(hit, query) for hit in hits],
                 ensure_ascii=False,
                 indent=2,
             )
         )
         return 0
-    print_hits(args.query, hits)
+    print_hits(query, hits)
     return 0 if hits else 1
 
 
@@ -160,17 +163,56 @@ def cmd_import_codex(args: argparse.Namespace) -> int:
     return subprocess.call(cmd, cwd=PROJECT_ROOT)
 
 
-def resolve_projects(value: str) -> tuple[str, ...]:
+def normalize_query(value: str) -> str:
+    return value.strip(QUERY_EDGE_PUNCTUATION) or value.strip()
+
+
+def resolve_projects(value: str, base_url: str, app_id: str) -> tuple[str, ...]:
     normalized = value.strip()
     lowered = normalized.lower()
-    if lowered in {"", "auto", "all", "*"}:
-        return DEFAULT_PROJECTS
-    canonical = {project.lower(): project for project in DEFAULT_PROJECTS}
+    discovered = discover_projects(base_url, app_id)
+    if lowered in AUTO_PROJECT_VALUES:
+        return discovered or DEFAULT_PROJECTS
+    canonical = {project.lower(): project for project in (*DEFAULT_PROJECTS, *discovered)}
     return tuple(
         canonical.get(part.strip().lower(), part.strip())
         for part in normalized.split(",")
         if part.strip()
     )
+
+
+def discover_projects(base_url: str, app_id: str) -> tuple[str, ...]:
+    projects = discover_projects_from_health(base_url, app_id)
+    if projects:
+        return projects
+    return discover_projects_from_memory_root(
+        Path(os.environ.get("EVEROS_MEMORY_ROOT", "~/.everos/memory")).expanduser(),
+        app_id,
+    )
+
+
+def discover_projects_from_health(base_url: str, app_id: str) -> tuple[str, ...]:
+    try:
+        data = request_json(base_url, "/api/v1/dashboard/health", timeout=1.5)
+    except RuntimeError:
+        return ()
+    root = data.get("memory_root")
+    if not isinstance(root, str) or not root:
+        return ()
+    return discover_projects_from_memory_root(Path(root), app_id)
+
+
+def discover_projects_from_memory_root(root: Path, app_id: str) -> tuple[str, ...]:
+    project_root = root / app_id / "projects"
+    try:
+        entries = [
+            child.name
+            for child in project_root.iterdir()
+            if child.is_dir() and not child.name.startswith(".")
+        ]
+    except OSError:
+        return ()
+    return tuple(sorted(entries, key=str.lower))
 
 
 def search_scope(
