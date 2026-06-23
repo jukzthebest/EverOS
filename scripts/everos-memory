@@ -9,6 +9,7 @@ without paying Python package import + LanceDB setup costs on every query.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import re
@@ -22,19 +23,23 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_BASE_URL = os.environ.get("EVEROS_MEMORY_BASE_URL", "http://127.0.0.1:8000")
-DEFAULT_USER_ID = os.environ.get("EVEROS_MEMORY_USER_ID", "lengxiaochu")
+DEFAULT_USER_ID = os.environ.get("EVEROS_MEMORY_USER_ID", getpass.getuser() or "user")
 DEFAULT_AGENT_ID = os.environ.get("EVEROS_MEMORY_AGENT_ID", "codex")
 DEFAULT_APP_ID = os.environ.get("EVEROS_MEMORY_APP_ID", "codex")
-DEFAULT_PROJECTS = (
-    "CSPM",
-    "Yundun",
-    "Daily",
-    "AIDP",
-    "AgentWiki",
-    "Content",
-    "Misc",
-)
+DEFAULT_PROJECTS = tuple(
+    project.strip()
+    for project in os.environ.get("EVEROS_MEMORY_PROJECTS", "default").split(",")
+    if project.strip()
+) or ("default",)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DIRECT_LOOKUP_TERMS = tuple(
+    term.strip()
+    for term in os.environ.get(
+        "EVEROS_MEMORY_DIRECT_LOOKUP_TERMS",
+        "command,cmd,connect,login,shell,cli",
+    ).split(",")
+    if term.strip()
+)
 
 
 @dataclass(frozen=True)
@@ -334,7 +339,7 @@ def hit_json(hit: Hit, query: str) -> dict[str, Any]:
 
 
 def filter_direct_lookup_hits(query: str, hits: list[Hit]) -> list[Hit]:
-    """For direct lookups, prefer hits that contain the named thing and a command block."""
+    """Prefer hits that contain the named thing and a command block."""
     if not is_direct_lookup_query(query):
         return hits
     identifiers = explicit_identifiers(query)
@@ -366,10 +371,7 @@ def is_direct_lookup_query(query: str) -> bool:
     lowered = query.lower()
     return bool(
         explicit_identifiers(query)
-        and re.search(
-            r"(命令|连接|链接|登录|模板|command|cmd|connect|login|shell|cli)",
-            lowered,
-        )
+        and any(term.lower() in lowered for term in DIRECT_LOOKUP_TERMS)
     )
 
 
@@ -392,7 +394,8 @@ def is_command_like_hit(hit: Hit) -> bool:
     return bool(
         re.search(r"```(?:bash|sh|shell|zsh|sql|console)?\s*\n", text)
         or re.search(
-            r"(?m)^\s*(?:\$ ?)?(?:mysql|psql|ssh|scp|curl|kubectl|docker|git|svn|uv|python3?|node|npm|pnpm|yarn|go|make|rg|grep|sed|awk)\b",
+            r"(?m)^\s*(?:\$ ?)?(?:mysql|psql|ssh|scp|curl|kubectl|docker|"
+            r"git|svn|uv|python3?|node|npm|pnpm|yarn|go|make|rg|grep|sed|awk)\b",
             text,
         )
         or re.search(
@@ -409,12 +412,6 @@ def is_direct_lookup_hit(hit: Hit, identifiers: list[str]) -> bool:
 def non_identifier_query_terms(query: str, identifiers: list[str]) -> list[str]:
     identifier_set = set(identifiers)
     stopwords = {
-        "一下",
-        "什么",
-        "如何",
-        "怎么",
-        "给我",
-        "帮我",
         "the",
         "how",
         "what",
@@ -429,23 +426,7 @@ def non_identifier_query_terms(query: str, identifiers: list[str]) -> list[str]:
 
 def direct_lookup_intent_terms(query: str) -> list[str]:
     lowered = query.lower()
-    terms = []
-    for term in (
-        "命令",
-        "连接",
-        "链接",
-        "登录",
-        "模板",
-        "command",
-        "cmd",
-        "connect",
-        "login",
-        "shell",
-        "cli",
-    ):
-        if term in lowered:
-            terms.append(term)
-    return terms
+    return [term for term in DIRECT_LOOKUP_TERMS if term.lower() in lowered]
 
 
 def has_term_overlap(hit: Hit, terms: list[str]) -> bool:
@@ -538,7 +519,9 @@ def query_tokens(query: str) -> list[str]:
             if len(token) <= 4:
                 tokens.append(token)
             if len(token) > 2:
-                tokens.extend(token[index : index + 2] for index in range(len(token) - 1))
+                tokens.extend(
+                    token[index : index + 2] for index in range(len(token) - 1)
+                )
             continue
         tokens.append(token)
     return list(dict.fromkeys(tokens))

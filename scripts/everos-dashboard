@@ -2,7 +2,7 @@
 set -euo pipefail
 
 BASE_URL="${EVEROS_MEMORY_BASE_URL:-http://127.0.0.1:8000}"
-LABEL="${EVEROS_LAUNCH_AGENT_LABEL:-com.lengxiaochu.everos-memory}"
+LABEL="${EVEROS_LAUNCH_AGENT_LABEL:-com.everos.memory}"
 PLIST="${EVEROS_LAUNCH_AGENT_FILE:-$HOME/Library/LaunchAgents/$LABEL.plist}"
 SERVICE="gui/$(id -u)/$LABEL"
 ACTION="${1:-open}"

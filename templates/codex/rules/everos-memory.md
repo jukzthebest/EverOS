@@ -1,27 +1,31 @@
-## EverOS 记忆规则
+## EverOS Memory Rule
 
-EverOS 是本机主长期记忆。任务可能依赖历史做题记录、错题、解题套路、边界条件、个人偏好或项目上下文时，先查 EverOS。
+EverOS is the primary local long-term memory. Use it when a task may depend on
+prior work, project history, local conventions, user preferences, repeated
+mistakes, or reusable procedures.
 
-默认命令：
+Default command:
 
 ```bash
 everos-memory search "<task keywords>" --project auto --limit 3
 ```
 
-项目路由：
+Project routing:
 
-- `--project AIDP`：题目、练习、错题、解法套路、代码模板。
-- `--project Daily`：本地 Codex 工具和工作流。
+- Use `--project auto` unless the current workspace has a known project id.
+- Set `EVEROS_MEMORY_PROJECTS` or `EVEROS_CODEX_PROJECT_RULES` if you want
+  custom project routing.
 
-优先级：
+Priority:
 
-1. 优先使用 EverOS 高置信命中。
-2. 只有 EverOS 不可用、低置信、无结果或冲突时，才查 Codex 内置记忆。
-3. 当前题面、当前文件和现场证据优先于历史记忆。
+1. Prefer high-confidence EverOS hits.
+2. Treat memory as context, not as proof. Current files, current prompt, and
+   live evidence win over stale memory.
+3. Fall back to other memory sources only when EverOS is unavailable,
+   low-confidence, empty, or conflicting.
 
-做题快路径：
+Fast path:
 
-- 相似题先查 `--project AIDP --limit 3`。
-- 复用历史错因、边界条件、代码模板和证明套路。
-- 不要机械复述旧答案；必须结合当前题面重新推导。
-- 生成或沉淀到 EverOS 的 Markdown 必须使用中文。
+- For direct command/template lookups, run one scoped query with `--limit 1`.
+- If a hit directly answers the request and is high confidence, answer directly.
+- Do not explain the retrieval process unless it affects trust or correctness.

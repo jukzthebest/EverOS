@@ -4,14 +4,15 @@
 - 过程更新只说关键变化、阻塞点或需要用户决策的事项。
 - 最终回答默认简短，但保留结果、关键证据、验证结果和必要限制。
 
-## EverOS 记忆
+## EverOS Memory
 
-EverOS 是本机主长期记忆。做题、相似题、错题、重复错误、个人解题策略相关任务，先查 EverOS。
+EverOS is the local long-term memory. Use it when the task may depend on prior
+work, local conventions, user preferences, repeated mistakes, or project history.
 
-默认命令：
+Default command:
 
 ```bash
-everos-memory search "<task keywords>" --project AIDP --limit 3
+everos-memory search "<task keywords>" --project auto --limit 3
 ```
 
-完整规则：`~/.codex/rules/everos-memory.md`。
+Full rule: `~/.codex/rules/everos-memory.md`.

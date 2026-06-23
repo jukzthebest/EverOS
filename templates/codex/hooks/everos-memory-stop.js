@@ -10,10 +10,10 @@ const { spawn } = require("child_process");
 const BASE_URL = process.env.EVEROS_MEMORY_BASE_URL || "http://127.0.0.1:8000";
 const REPO =
   process.env.EVEROS_REPO ||
-  path.join(os.homedir(), "Documents/daily/everos-codex-oauth-poc");
+  path.join(os.homedir(), "everos");
 const MEMORY_ROOT =
   process.env.EVEROS_MEMORY_ROOT ||
-  path.join(os.homedir(), "Obsidian", "EverOS-Memory", "everos");
+  path.join(os.homedir(), ".everos", "memory");
 const SESSIONS_DIR = path.join(os.homedir(), ".codex", "sessions");
 const LOG = path.join(os.homedir(), ".codex", "log", "everos-memory-hook.log");
 const LOCK = path.join(os.tmpdir(), "everos-memory-import.lock");

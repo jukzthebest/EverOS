@@ -164,6 +164,12 @@ tmp/
 outputs/
 logs/
 nohup.out
+.playwright-cli/
+
+# Local one-off investigation scripts.
+scripts/*_audit.py
+scripts/*_poc.py
+scripts/remap_*_memory_*.py
 
 # Repository media policy: do not commit images, videos, or asset/media folders.
 # Use external hosting, release artifacts, or approved storage and link from docs.

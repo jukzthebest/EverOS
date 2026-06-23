@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import time
@@ -66,14 +67,32 @@ _GENERIC_TITLE_TEXTS = _LOW_VALUE_TEXTS | frozenset(
     }
 )
 _DEFAULT_CODEX_SESSIONS_DIR = Path("~/.codex/sessions")
-_CODEX_PROJECT_RULES: tuple[tuple[str, str], ...] = (
-    ("/Yundun/", "Yundun"),
-    ("/CSPM/", "CSPM"),
-    ("/aidp/", "AIDP"),
-    ("/agent-wiki/", "AgentWiki"),
-    ("/project-wiki/", "AgentWiki"),
-    ("/Documents/daily/", "Daily"),
-    ("/Obsidian/", "Content"),
+_DEFAULT_USER_ID = os.environ.get(
+    "EVEROS_MEMORY_USER_ID", os.environ.get("USER", "user")
+)
+_DEFAULT_AGENT_ID = os.environ.get("EVEROS_MEMORY_AGENT_ID", "codex")
+_DEFAULT_APP_ID = os.environ.get("EVEROS_MEMORY_APP_ID", "codex")
+_DEFAULT_PROJECT_ID = os.environ.get("EVEROS_MEMORY_PROJECT", "default")
+_DEFAULT_MEMORY_ROOT = Path(os.environ.get("EVEROS_MEMORY_ROOT", "~/.everos/memory"))
+
+
+def _parse_codex_project_rules(value: str) -> tuple[tuple[re.Pattern[str], str], ...]:
+    rules: list[tuple[re.Pattern[str], str]] = []
+    for rule in value.split(","):
+        if "=" not in rule:
+            continue
+        pattern, project_id = (part.strip() for part in rule.split("=", 1))
+        if not pattern or not project_id:
+            continue
+        try:
+            rules.append((re.compile(pattern, re.I), project_id))
+        except re.error:
+            continue
+    return tuple(rules)
+
+
+_CODEX_PROJECT_RULES = _parse_codex_project_rules(
+    os.environ.get("EVEROS_CODEX_PROJECT_RULES", "")
 )
 
 
@@ -110,15 +129,15 @@ def import_codex(
     user_id: Annotated[
         str,
         typer.Option("--user-id", help="EverOS sender_id for user messages."),
-    ] = "lengxiaochu",
+    ] = _DEFAULT_USER_ID,
     agent_id: Annotated[
         str,
         typer.Option("--agent-id", help="EverOS sender_id for assistant messages."),
-    ] = "codex",
+    ] = _DEFAULT_AGENT_ID,
     app_id: Annotated[
         str,
         typer.Option("--app-id", help="EverOS app_id scope."),
-    ] = "codex",
+    ] = _DEFAULT_APP_ID,
     project_id: Annotated[
         str | None,
         typer.Option(
@@ -320,10 +339,10 @@ def import_codex_v2(
     output_root: Annotated[
         Path,
         typer.Option("--output-root", help="Structured memory root to write."),
-    ] = Path("~/Obsidian/EverOS-Memory/everos"),
-    user_id: Annotated[str, typer.Option("--user-id")] = "lengxiaochu",
-    agent_id: Annotated[str, typer.Option("--agent-id")] = "codex",
-    app_id: Annotated[str, typer.Option("--app-id")] = "codex",
+    ] = _DEFAULT_MEMORY_ROOT,
+    user_id: Annotated[str, typer.Option("--user-id")] = _DEFAULT_USER_ID,
+    agent_id: Annotated[str, typer.Option("--agent-id")] = _DEFAULT_AGENT_ID,
+    app_id: Annotated[str, typer.Option("--app-id")] = _DEFAULT_APP_ID,
     project_id: Annotated[
         str | None,
         typer.Option("--project-id", help="Override project_id for every session."),
@@ -1047,10 +1066,6 @@ def _record_body(
 def _domain_for_session(session: CodexSession, text: str) -> str:
     cwd = session.cwd or ""
     lower = f"{cwd}\n{text}".lower()
-    if "yundun-project-board" in lower:
-        return "project_board"
-    if "apsarastack" in lower or "scanner_main" in lower or "scanner_upgrade" in lower:
-        return "apsarastack_ops"
     if "upgrade.json" in lower or "升级" in text:
         return "upgrade"
     if "git svn" in lower or "dcommit" in lower:
@@ -1087,20 +1102,7 @@ _ENTITY_RE = re.compile(
 
 
 def _entities_from_text(text: str) -> list[str]:
-    preferred = [
-        "scanner_main",
-        "scanner_upgrade",
-        "schema_version",
-        "upgrade.json",
-        "project_id",
-        "AIDP",
-        "CSPM",
-        "Yundun",
-    ]
     entities: list[str] = []
-    for item in preferred:
-        if item in text and item not in entities:
-            entities.append(item)
     for match in _ENTITY_RE.finditer(text):
         value = match.group(0).strip(".,;:，。；：")
         if value in entities or len(value) > 48:
@@ -1182,11 +1184,14 @@ def _session_id_from_path(path: Path) -> str:
 
 def _project_id_from_cwd(value: Any) -> str:
     if isinstance(value, str) and value.strip():
-        normalized = f"/{value.strip().strip('/')}/"
-        for marker, project_id in _CODEX_PROJECT_RULES:
-            if marker in normalized:
+        normalized = value.strip()
+        for pattern, project_id in _CODEX_PROJECT_RULES:
+            if pattern.search(normalized):
                 return project_id
-    return "Misc"
+        leaf = Path(value).expanduser().name
+        if leaf:
+            return _safe_id(leaf)
+    return _DEFAULT_PROJECT_ID
 
 
 def _safe_id(value: str) -> str:

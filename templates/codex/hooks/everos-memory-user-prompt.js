@@ -9,6 +9,12 @@ const { spawnSync } = require("child_process");
 const LOG = path.join(os.homedir(), ".codex", "log", "everos-memory-prompt-hook.log");
 const COMMAND_TIMEOUT_MS = 800;
 const MAX_CONTEXT_CHARS = 1800;
+const DEFAULT_PROJECT = process.env.EVEROS_MEMORY_PROJECT || "auto";
+const PROJECT_RULES = parseProjectRules(process.env.EVEROS_CODEX_PROJECT_RULES || "");
+const RECALL_TERMS = splitTerms(
+  process.env.EVEROS_MEMORY_RECALL_TERMS ||
+    "previous,last,time,before,memory,remember,command,config,path,file,template,how,why"
+);
 
 let chunks = [];
 let done = false;
@@ -25,7 +31,7 @@ function run() {
   const prompt = extractPrompt(payload);
   const cwd = extractCwd(payload);
   const project = inferProject(prompt, cwd);
-  if (!project || !shouldRecall(prompt, project)) {
+  if (!shouldRecall(prompt)) {
     return quiet("skip", { project, prompt: clip(prompt, 160) });
   }
 
@@ -140,50 +146,45 @@ function findByKeys(value, keys, depth = 0) {
 
 function inferProject(prompt, cwd) {
   const haystack = `${prompt}\n${cwd}`.toLowerCase();
-  if (
-    /(scanner_main|scanner_upgrade|moscan|yundun|apsarastack|云盾|租户侧|平台侧|schema_version)/i.test(
-      haystack
-    )
-  ) {
-    return "Yundun";
+  for (const [pattern, project] of PROJECT_RULES) {
+    if (pattern.test(haystack)) return project;
   }
-  if (/(cspm|longmen|宵明|moresec|大禹|策略规则|upgrade\.json)/i.test(haystack)) {
-    return "CSPM";
-  }
-  if (/(aidp|gsb|singleimage|rubric|质检|盲审)/i.test(haystack)) {
-    return "AIDP";
-  }
-  if (/(everos|codex|memory|hook|记忆库|长期记忆)/i.test(haystack)) {
-    return "Daily";
-  }
-  return "";
+  return DEFAULT_PROJECT;
 }
 
-function shouldRecall(prompt, project) {
+function shouldRecall(prompt) {
   if (!prompt || prompt.length > 500) return false;
-  if (
-    project === "Yundun" &&
-    /(scanner_main|scanner_upgrade|moscan|schema_version|连接命令|mysql|数据库|迁移|升级)/i.test(
-      prompt
-    )
-  ) {
-    return true;
-  }
-  return /(之前|上次|当时|我们这套|现在这套|记忆|命令|怎么做|如何|配置|路径|文件|模板)/i.test(
-    prompt
-  );
+  const lowered = prompt.toLowerCase();
+  return RECALL_TERMS.some((term) => lowered.includes(term.toLowerCase()));
 }
 
 function buildQuery(prompt, project) {
   const compact = prompt.replace(/\s+/g, " ").trim();
-  if (
-    project === "Yundun" &&
-    /scanner_main/i.test(compact) &&
-    /(连接|命令|mysql|数据库)/i.test(compact)
-  ) {
-    return "scanner_main 连接命令 mysql";
-  }
   return compact.slice(0, 180);
+}
+
+function parseProjectRules(value) {
+  return value
+    .split(",")
+    .map((rule) => rule.trim())
+    .filter(Boolean)
+    .map((rule) => {
+      const [pattern, project] = rule.split("=", 2).map((part) => part.trim());
+      if (!pattern || !project) return null;
+      try {
+        return [new RegExp(pattern, "i"), project];
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function splitTerms(value) {
+  return value
+    .split(",")
+    .map((term) => term.trim())
+    .filter(Boolean);
 }
 
 function isUsefulHit(hit, prompt) {
@@ -201,7 +202,7 @@ function isUsefulHit(hit, prompt) {
 function formatContext(project, query, hit) {
   const body = clip(extractAnswerContext(String(hit.body || "")), MAX_CONTEXT_CHARS);
   return [
-    "EverOS 预召回：",
+    "EverOS pre-recall:",
     `source=everos project=${project} confidence=${confidence(hit.score)}`,
     `query=${query}`,
     `hit=[${hit.kind || "memory"}] ${hit.title || hit.item_id || ""}`,
@@ -210,7 +211,7 @@ function formatContext(project, query, hit) {
     "",
     body,
     "",
-    "规则：如果该记忆已经足够回答直接查询，直接给答案；不要解释检索过程，不要为了表演再搜索。",
+    "Rule: use this as local memory context. If it directly answers the request, answer directly; otherwise verify against current evidence.",
   ]
     .filter(Boolean)
     .join("\n");

@@ -4,6 +4,9 @@ const state = {
   previewMode: false,
 };
 
+const DEFAULT_USER_ID = "user";
+const DEFAULT_AGENT_ID = "codex";
+
 const $ = (selector) => document.querySelector(selector);
 
 async function request(path, options = {}) {
@@ -76,7 +79,7 @@ async function runSearch(event) {
   const ownerType = $("#searchOwnerType").value;
   const basePayload = {
     query,
-    app_id: "codex",
+    app_id: $("#searchAppId").value.trim() || "codex",
     project_id: $("#searchProjectId").value.trim() || "default",
     method: $("#searchMethod").value,
     top_k: 20,
@@ -104,7 +107,7 @@ async function runSearchRequests(basePayload, ownerType) {
         body: JSON.stringify({
           ...basePayload,
           include_profile: true,
-          user_id: ownerId || "lengxiaochu",
+          user_id: ownerId || DEFAULT_USER_ID,
         }),
       }),
     );
@@ -116,7 +119,8 @@ async function runSearchRequests(basePayload, ownerType) {
         body: JSON.stringify({
           ...basePayload,
           include_profile: false,
-          agent_id: ownerType === "agent" ? ownerId || "codex" : "codex",
+          agent_id:
+            ownerType === "agent" ? ownerId || DEFAULT_AGENT_ID : DEFAULT_AGENT_ID,
         }),
       }),
     );
@@ -228,24 +232,11 @@ function itemMeta(item, query) {
 
 function filterAndRankItems(query, items) {
   const terms = requiredAsciiTerms(query);
-  let filtered = terms.length
+  const filtered = terms.length
     ? items.filter((item) =>
         terms.every((term) => searchableItemText(item).includes(term)),
       )
     : items;
-  if (isDirectLookupQuery(query)) {
-    const identifiers = explicitIdentifiers(query);
-    const commandMatches = filtered.filter(
-      (item) => matchesLookupIdentifier(item, identifiers) && isCommandLikeItem(item),
-    );
-    if (commandMatches.length) {
-      const intentTerms = directLookupIntentTerms(query);
-      const preferred = intentTerms.length
-        ? commandMatches.filter((item) => hasTermOverlap(item, intentTerms))
-        : commandMatches;
-      filtered = preferred.length ? preferred : commandMatches;
-    }
-  }
   return filtered.sort(
     (left, right) => (boostedScore(right, query) ?? 0) - (boostedScore(left, query) ?? 0),
   );
@@ -290,7 +281,6 @@ function boostedScore(item, query) {
     if (title.includes(token)) boost += 5;
     if (body.includes(token)) boost += 0.5;
   }
-  if (isDirectLookupQuery(query) && isCommandLikeItem(item)) boost += 2;
   return base + boost;
 }
 
@@ -312,62 +302,12 @@ function queryTokens(query) {
   return [...new Set(tokens)];
 }
 
-function isDirectLookupQuery(query) {
-  return (
-    explicitIdentifiers(query).length > 0 &&
-    /(命令|连接|链接|登录|模板|command|cmd|connect|login|shell|cli)/i.test(query)
-  );
-}
-
-function directLookupIntentTerms(query) {
-  const lowered = query.toLowerCase();
-  return [
-    "命令",
-    "连接",
-    "链接",
-    "登录",
-    "模板",
-    "command",
-    "cmd",
-    "connect",
-    "login",
-    "shell",
-    "cli",
-  ].filter((term) => lowered.includes(term));
-}
-
-function explicitIdentifiers(query) {
-  return [...query.matchAll(/[A-Za-z0-9_./:-]{3,}/g)].map((match) =>
-    match[0].toLowerCase(),
-  );
-}
-
-function matchesLookupIdentifier(item, identifiers) {
-  if (!identifiers.length) return true;
-  const text = searchableItemText(item);
-  return identifiers.some((identifier) => text.includes(identifier));
-}
-
-function hasTermOverlap(item, terms) {
-  const text = searchableItemText(item);
-  return terms.some((term) => text.includes(term));
-}
-
-function isCommandLikeItem(item) {
-  const text = `${item.title || ""}\n${item.body || ""}`.toLowerCase();
-  return (
-    /```(?:bash|sh|shell|zsh|sql|console)?\s*\n/i.test(text) ||
-    /(^|\n)\s*(?:\$ ?)?(?:mysql|psql|ssh|scp|curl|kubectl|docker|git|svn|uv|python3?|node|npm|pnpm|yarn|go|make|rg|grep|sed|awk)\b/i.test(text) ||
-    /\b(select|insert|update|delete|optimize\s+table|alter\s+table|create\s+table)\b/i.test(text)
-  );
-}
-
 function syncOwnerId() {
   const ownerType = $("#searchOwnerType").value;
   if (ownerType === "agent") {
-    $("#searchOwnerId").value = "codex";
+    $("#searchOwnerId").value = DEFAULT_AGENT_ID;
   } else if (ownerType === "user") {
-    $("#searchOwnerId").value = "lengxiaochu";
+    $("#searchOwnerId").value = DEFAULT_USER_ID;
   }
 }
 

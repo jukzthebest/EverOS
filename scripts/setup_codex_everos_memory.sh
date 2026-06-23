@@ -2,10 +2,10 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MEMORY_ROOT="${EVEROS_MEMORY_ROOT:-$HOME/Obsidian/EverOS-Memory/everos}"
+MEMORY_ROOT="${EVEROS_MEMORY_ROOT:-$HOME/.everos/memory}"
 CONFIG_FILE="${EVEROS_CONFIG_FILE:-$HOME/.everos/config.toml}"
 BASE_URL="${EVEROS_MEMORY_BASE_URL:-http://127.0.0.1:8000}"
-LAUNCH_AGENT_LABEL="com.lengxiaochu.everos-memory"
+LAUNCH_AGENT_LABEL="${EVEROS_LAUNCH_AGENT_LABEL:-com.everos.memory}"
 LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$LAUNCH_AGENT_LABEL.plist"
 UV_BIN="$(command -v uv || true)"
 
@@ -44,7 +44,7 @@ codex_model = "gpt-5.5"
 openai_model = "gpt-4o-mini"
 openai_base_url = "https://api.openai.com/v1"
 codex_auth_file = "~/.codex/auth.json"
-extraction_language = "zh"
+extraction_language = "auto"
 
 [embedding]
 provider = "local_hash"
@@ -65,7 +65,7 @@ chmod +x "$HOME/.codex/hooks/everos-memory-user-prompt.js" \
 
 if [[ ! -f "$HOME/.codex/AGENTS.md" ]]; then
   cp "$REPO_DIR/templates/codex/AGENTS.md" "$HOME/.codex/AGENTS.md"
-elif ! grep -q 'EverOS 记忆' "$HOME/.codex/AGENTS.md"; then
+elif ! grep -q 'EverOS Memory' "$HOME/.codex/AGENTS.md"; then
   {
     printf '\n'
     cat "$REPO_DIR/templates/codex/AGENTS.md"

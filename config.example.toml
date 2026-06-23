@@ -25,8 +25,9 @@ provider = "openai"
 model    = "gpt-4o-mini"
 api_key  = "sk-..."
 base_url = "https://api.openai.com/v1"
-# Prefer Simplified Chinese memory Markdown. Use "auto" to follow upstream prompts.
-extraction_language = "zh"
+# Use "auto" to follow upstream prompts; set "zh" or "en" to force memory
+# extraction language.
+extraction_language = "auto"
 
 # Fallback chain, Hermes-style. Providers are tried in order. Missing
 # provider config is skipped at startup; runtime request failures fall
@@ -49,7 +50,7 @@ extraction_language = "zh"
 # codex_model  = "gpt-5.5"
 # codex_auth_file = "~/.codex/auth.json"
 # service_tier = "priority"
-# extraction_language = "zh"
+# extraction_language = "auto"
 
 # Grok/SuperGrok CLI OAuth alternative. Reuses `grok login` credentials
 # from ~/.grok/auth.json and the documented CLI chat proxy.
@@ -59,7 +60,7 @@ extraction_language = "zh"
 # grok_model     = "grok-build"
 # grok_auth_file = "~/.grok/auth.json"
 # grok_base_url  = "https://cli-chat-proxy.grok.com/v1"
-# extraction_language = "zh"
+# extraction_language = "auto"
 
 # ── Embedding ─────────────────────────────────────────
 [embedding]

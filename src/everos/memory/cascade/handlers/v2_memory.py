@@ -52,7 +52,7 @@ class V2EpisodeHandler(Handler):
         row = Episode(
             id=row_id,
             entry_id=row_id,
-            owner_id=_source_string(fm, "user_id", "lengxiaochu"),
+            owner_id=_source_string(fm, "user_id", "user"),
             owner_type="user",
             app_id=_app_id(md_path),
             project_id=str(fm.get("project") or _project_from_path(md_path)),
@@ -60,7 +60,7 @@ class V2EpisodeHandler(Handler):
             timestamp=_source_timestamp(fm),
             parent_type=ParentType.MEMCELL.value,
             parent_id=_source_string(fm, "parent_id", ""),
-            sender_ids=["lengxiaochu", "codex"],
+            sender_ids=_source_list(fm, "sender_ids", ["user", _app_id(md_path)]),
             subject=str(fm.get("title") or row_id),
             summary=summary,
             episode=body,
@@ -175,7 +175,7 @@ class V2PlaybookHandler(Handler):
         fm = parsed.frontmatter
         digest = _digest(fm, parsed.body)
         name = str(fm.get("id") or _id_from_path(md_path))
-        row_id = f"codex_{name}"
+        row_id = f"{_app_id(md_path)}_{name}"
         prior = await agent_skill_repo.get_by_id(row_id)
         if prior is not None and prior.content_sha256 == digest:
             return HandlerOutcome(
@@ -196,7 +196,7 @@ class V2PlaybookHandler(Handler):
         vector = await self._deps.embedder.embed(_index_text(fm, description))
         row = AgentSkill(
             id=row_id,
-            owner_id="codex",
+            owner_id=_source_string(fm, "agent_id", _app_id(md_path)),
             owner_type="agent",
             app_id=_app_id(md_path),
             project_id=str(fm.get("project") or _project_from_path(md_path)),
@@ -258,6 +258,19 @@ def _source_string(frontmatter: dict[str, Any], key: str, default: str) -> str:
         value = source.get(key)
         if isinstance(value, str) and value:
             return value
+    return default
+
+
+def _source_list(
+    frontmatter: dict[str, Any], key: str, default: list[str]
+) -> list[str]:
+    source = frontmatter.get("source")
+    if isinstance(source, dict):
+        value = source.get(key)
+        if isinstance(value, list):
+            items = [str(item) for item in value if str(item)]
+            if items:
+                return items
     return default
 
 
