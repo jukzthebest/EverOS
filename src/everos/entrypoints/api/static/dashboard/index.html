@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>EverOS Memory Dashboard</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/dashboard/styles.css" />
   </head>
   <body>
@@ -85,13 +86,22 @@
 
         <form id="searchForm" class="search-bar">
           <input id="searchQuery" type="search" placeholder="Search memories" />
-          <select id="searchOwnerType">
+          <select id="searchOwnerType" aria-label="Owner type">
+            <option value="both">Both</option>
             <option value="user">User</option>
             <option value="agent">Agent</option>
           </select>
-          <input id="searchOwnerId" value="lengxiaochu" />
-          <input id="searchProjectId" value="default" />
-          <select id="searchMethod">
+          <input id="searchOwnerId" value="lengxiaochu" aria-label="Owner id" />
+          <select id="searchProjectId" aria-label="Project">
+            <option value="Daily">Daily</option>
+            <option value="Yundun">Yundun</option>
+            <option value="CSPM">CSPM</option>
+            <option value="AIDP">AIDP</option>
+            <option value="AgentWiki">AgentWiki</option>
+            <option value="Content">Content</option>
+            <option value="Misc">Misc</option>
+          </select>
+          <select id="searchMethod" aria-label="Search method">
             <option value="keyword">keyword</option>
             <option value="hybrid">hybrid</option>
             <option value="vector">vector</option>

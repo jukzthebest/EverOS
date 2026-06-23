@@ -73,33 +73,65 @@ async function runSearch(event) {
   if (!query) return;
 
   const ownerType = $("#searchOwnerType").value;
-  const payload = {
+  const basePayload = {
     query,
     app_id: "codex",
     project_id: $("#searchProjectId").value.trim() || "default",
     method: $("#searchMethod").value,
     top_k: 10,
-    include_profile: ownerType === "user",
   };
-  if (ownerType === "user") {
-    payload.user_id = $("#searchOwnerId").value.trim() || "lengxiaochu";
-  } else {
-    payload.agent_id = $("#searchOwnerId").value.trim() || "codex";
-  }
 
   const results = $("#searchResults");
   results.textContent = "Searching...";
   $("#searchPreview").textContent = "";
 
   try {
-    const response = await request("/api/v1/memory/search", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    renderSearchResults(response.data);
+    const response = await runSearchRequests(basePayload, ownerType);
+    renderSearchResults(response);
   } catch (error) {
     results.textContent = error.message;
   }
+}
+
+async function runSearchRequests(basePayload, ownerType) {
+  const ownerId = $("#searchOwnerId").value.trim();
+  const requests = [];
+  if (ownerType === "user" || ownerType === "both") {
+    requests.push(
+      request("/api/v1/memory/search", {
+        method: "POST",
+        body: JSON.stringify({
+          ...basePayload,
+          include_profile: true,
+          user_id: ownerId || "lengxiaochu",
+        }),
+      }),
+    );
+  }
+  if (ownerType === "agent" || ownerType === "both") {
+    requests.push(
+      request("/api/v1/memory/search", {
+        method: "POST",
+        body: JSON.stringify({
+          ...basePayload,
+          include_profile: false,
+          agent_id: ownerType === "agent" ? ownerId || "codex" : "codex",
+        }),
+      }),
+    );
+  }
+  const responses = await Promise.all(requests);
+  return mergeSearchData(responses.map((response) => response.data));
+}
+
+function mergeSearchData(chunks) {
+  return {
+    episodes: chunks.flatMap((item) => item.episodes || []),
+    profiles: chunks.flatMap((item) => item.profiles || []),
+    agent_cases: chunks.flatMap((item) => item.agent_cases || []),
+    agent_skills: chunks.flatMap((item) => item.agent_skills || []),
+    unprocessed_messages: chunks.flatMap((item) => item.unprocessed_messages || []),
+  };
 }
 
 function renderSearchResults(data) {
@@ -123,7 +155,7 @@ function renderSearchResults(data) {
       raw: item,
     })),
     ...data.agent_skills.map((item) => ({
-      title: item.name || item.id,
+      title: item.description || item.name || item.id,
       meta: `skill · confidence ${score(item.confidence)}`,
       body: item.content || item.description,
       raw: item,
@@ -149,6 +181,10 @@ function renderSearchResults(data) {
     button.querySelector("strong").textContent = item.title;
     button.querySelector("span").textContent = item.meta;
     button.addEventListener("click", () => {
+      document
+        .querySelectorAll(".result-item")
+        .forEach((entry) => entry.classList.remove("active"));
+      button.classList.add("active");
       $("#searchPreview").textContent = `${item.body}\n\n${JSON.stringify(
         item.raw,
         null,
@@ -157,10 +193,20 @@ function renderSearchResults(data) {
     });
     results.append(button);
   }
+  results.querySelector(".result-item")?.click();
 }
 
 function score(value) {
   return typeof value === "number" ? value.toFixed(3) : "-";
+}
+
+function syncOwnerId() {
+  const ownerType = $("#searchOwnerType").value;
+  if (ownerType === "agent") {
+    $("#searchOwnerId").value = "codex";
+  } else if (ownerType === "user") {
+    $("#searchOwnerId").value = "lengxiaochu";
+  }
 }
 
 async function loadTree() {
@@ -251,6 +297,7 @@ document.querySelectorAll(".nav-button").forEach((button) => {
 });
 
 $("#refreshOverview").addEventListener("click", loadOverview);
+$("#searchOwnerType").addEventListener("change", syncOwnerId);
 $("#searchForm").addEventListener("submit", runSearch);
 $("#refreshTree").addEventListener("click", loadTree);
 $("#saveFile").addEventListener("click", saveFile);
