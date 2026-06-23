@@ -40,6 +40,9 @@ from everos.infra.persistence.markdown import (
     EpisodeDailyFrontmatter,
     ForesightDailyFrontmatter,
     UserProfileFrontmatter,
+    V2CaseFrontmatter,
+    V2EpisodeFrontmatter,
+    V2PlaybookFrontmatter,
 )
 
 from .handlers import (
@@ -51,6 +54,9 @@ from .handlers import (
     Handler,
     HandlerDeps,
     UserProfileHandler,
+    V2CaseHandler,
+    V2EpisodeHandler,
+    V2PlaybookHandler,
 )
 
 
@@ -88,6 +94,27 @@ class KindSpec:
 
 
 KIND_REGISTRY: tuple[KindSpec, ...] = (
+    KindSpec(
+        name="v2_episode",
+        frontmatter_schema=V2EpisodeFrontmatter,
+        lance_schema=Episode,
+        lance_repo=episode_repo,
+        handler_factory=V2EpisodeHandler,
+    ),
+    KindSpec(
+        name="v2_case",
+        frontmatter_schema=V2CaseFrontmatter,
+        lance_schema=AgentCase,
+        lance_repo=agent_case_repo,
+        handler_factory=V2CaseHandler,
+    ),
+    KindSpec(
+        name="v2_playbook",
+        frontmatter_schema=V2PlaybookFrontmatter,
+        lance_schema=AgentSkill,
+        lance_repo=agent_skill_repo,
+        handler_factory=V2PlaybookHandler,
+    ),
     KindSpec(
         name="episode",
         frontmatter_schema=EpisodeDailyFrontmatter,

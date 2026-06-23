@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MEMORY_ROOT="${EVEROS_MEMORY_ROOT:-$HOME/Obsidian/EverOS-Memory/everos}"
+MEMORY_ROOT="${EVEROS_MEMORY_ROOT:-$HOME/Obsidian/EverOS-Memory/everos-v2}"
 CONFIG_FILE="${EVEROS_CONFIG_FILE:-$HOME/.everos/config.toml}"
 BASE_URL="${EVEROS_MEMORY_BASE_URL:-http://127.0.0.1:8000}"
 LAUNCH_AGENT_LABEL="com.lengxiaochu.everos-memory"
@@ -58,9 +58,12 @@ fi
 
 cp "$REPO_DIR/templates/codex/rules/everos-memory.md" \
   "$HOME/.codex/rules/everos-memory.md"
+cp "$REPO_DIR/templates/codex/hooks/everos-memory-user-prompt.js" \
+  "$HOME/.codex/hooks/everos-memory-user-prompt.js"
 cp "$REPO_DIR/templates/codex/hooks/everos-memory-stop.js" \
   "$HOME/.codex/hooks/everos-memory-stop.js"
-chmod +x "$HOME/.codex/hooks/everos-memory-stop.js"
+chmod +x "$HOME/.codex/hooks/everos-memory-user-prompt.js" \
+  "$HOME/.codex/hooks/everos-memory-stop.js"
 
 if [[ ! -f "$HOME/.codex/AGENTS.md" ]]; then
   cp "$REPO_DIR/templates/codex/AGENTS.md" "$HOME/.codex/AGENTS.md"
@@ -75,6 +78,16 @@ if [[ ! -f "$HOME/.codex/hooks.json" ]]; then
   cat > "$HOME/.codex/hooks.json" <<'EOF'
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.codex/hooks/everos-memory-user-prompt.js\""
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -97,18 +110,30 @@ from pathlib import Path
 path = Path(os.environ["HOOKS_JSON"])
 data = json.loads(path.read_text())
 hooks = data.setdefault("hooks", {})
-stop = hooks.setdefault("Stop", [])
-command = 'node "$HOME/.codex/hooks/everos-memory-stop.js"'
+changed = False
 
-for group in stop:
-    for hook in group.get("hooks", []):
-        if hook.get("command") == command:
-            break
-    else:
-        continue
-    break
-else:
-    stop.append({"hooks": [{"type": "command", "command": command}]})
+def ensure_command(event: str, suffix: str, command: str) -> None:
+    global changed
+    groups = hooks.setdefault(event, [])
+    for group in groups:
+        for hook in group.get("hooks", []):
+            if suffix in str(hook.get("command", "")):
+                return
+    groups.append({"hooks": [{"type": "command", "command": command}]})
+    changed = True
+
+ensure_command(
+    "UserPromptSubmit",
+    "everos-memory-user-prompt.js",
+    'node "$HOME/.codex/hooks/everos-memory-user-prompt.js"',
+)
+ensure_command(
+    "Stop",
+    "everos-memory-stop.js",
+    'node "$HOME/.codex/hooks/everos-memory-stop.js"',
+)
+
+if changed:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 PY
 fi

@@ -7,9 +7,9 @@
 - OAuth / fallback LLM：`grok_oauth -> codex_oauth -> openai`。
 - 本地 embedding 兜底：`local_hash`，没有 API key 也能启动和建索引。
 - Dashboard：`http://127.0.0.1:8000/dashboard/`。
-- Codex session 导入：`everos import codex`。
+- Codex session 导入：`everos import codex-v2`，直接写 v2 中文 Markdown。
 - 快速检索 CLI：`scripts/everos-memory`。
-- Codex Stop hook 模板：自动异步导入稳定 session。
+- Codex hooks 模板：提交前预召回，结束后异步导入稳定 session。
 - 一键 setup 脚本：`scripts/setup_codex_everos_memory.sh`。
 
 ## 快速安装
@@ -27,7 +27,7 @@ bash scripts/setup_codex_everos_memory.sh
 默认记忆根目录：
 
 ```text
-~/Obsidian/EverOS-Memory/everos
+~/Obsidian/EverOS-Memory/everos-v2
 ```
 
 默认配置文件：
@@ -79,33 +79,40 @@ tail -50 ~/.codex/log/everos-memory-hook.log
 4. 同步记忆时只同步 Markdown 本体，不同步索引：
 
 ```text
-~/Obsidian/EverOS-Memory/everos/
+~/Obsidian/EverOS-Memory/everos-v2/
 ```
 
 不要同步：
 
 ```text
-~/Obsidian/EverOS-Memory/everos/.index/
-~/Obsidian/EverOS-Memory/everos/.tmp/
+~/Obsidian/EverOS-Memory/everos-v2/.index/
+~/Obsidian/EverOS-Memory/everos-v2/.tmp/
 ```
 
 5. 新设备同步 Markdown 后，本地重建索引：
 
 ```bash
-rm -rf ~/Obsidian/EverOS-Memory/everos/.index/lancedb
+rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/lancedb
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade sync
 ```
 
 ## Session 与 LanceDB 处理逻辑
+
+Codex 读路径：
+
+```text
+UserPromptSubmit hook
+  -> everos-memory search --limit 1
+  -> 高置信命中注入当前请求
+```
 
 Codex session 的写入链路：
 
 ```text
 Codex session JSONL
   -> Stop hook
-  -> everos import codex
-  -> EverOS add/flush
-  -> 中文 Markdown 记忆
+  -> everos import codex-v2
+  -> v2 中文 Markdown 记忆
   -> cascade
   -> SQLite + LanceDB
 ```
@@ -118,20 +125,21 @@ Stop hook 不导入当前正在写入的 session。它会：
 - 只导入 mtime 超过 180 秒的稳定 session。
 - 每次最多导入 1 个 session，避免 Stop 阶段卡顿。
 - 使用 `/tmp/everos-memory-import.lock` 防并发。
+- 写入后自动执行 `everos cascade sync`，让 SQLite/LanceDB 跟上 Markdown。
 
 去重规则：
 
 - 默认开启 `--skip-existing`。
-- 已导入 session 会写入 `<memory-root>/codex/.imported_sessions.jsonl`。
-- 补导时会先读取这个 ledger。
-- 同时扫描已有 Markdown 中的 `session_id` 字段，避免 ledger 丢失后重复导入。
-- 长 session 按 `--chunk-messages 40` 切成 `session.part001` 这类稳定 id，切片也会参与去重。
+- 已导入 session 会写入 `<memory-root>/codex/.system/import-manifest.jsonl`。
+- 补导时会先读取这个 manifest，按 `project + session_id` 跳过重复 session。
+- 文件名包含日期、可读标题和 session 短 id，避免同标题覆盖。
+- 超大 session 先落到 `codex/inbox/oversized/`，不直接污染正式记忆。
 
 去噪规则：
 
 - 跳过没有用户消息或没有助手回复的 session。
 - 跳过 Codex 注入的元信息，例如 `AGENTS.md instructions`、`environment_context`、内部上下文和 aborted 标记。
-- 默认开启 `--skip-low-value`。
+- 默认启用低价值过滤。
 - 跳过纯确认类低价值 session，例如 `ok`、`好的`、`继续`。
 - 跳过语义字符数少于 24 的极短 session。
 
@@ -139,16 +147,13 @@ Stop hook 不导入当前正在写入的 session。它会：
 
 ```bash
 EVEROS_CONFIG_FILE=~/.everos/config.toml \
-uv run everos import codex \
+uv run everos import codex-v2 \
   --sessions-dir ~/.codex/sessions \
-  --base-url http://127.0.0.1:8000 \
   --newest \
   --limit 20 \
-  --chunk-messages 40 \
   --min-age-seconds 180 \
   --skip-existing \
-  --skip-low-value \
-  --continue-on-error
+  --defer-oversized
 ```
 
 LanceDB 的处理逻辑：
@@ -162,7 +167,7 @@ LanceDB 的处理逻辑：
 重建 LanceDB：
 
 ```bash
-rm -rf ~/Obsidian/EverOS-Memory/everos/.index/lancedb
+rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/lancedb
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade sync
 ```
 

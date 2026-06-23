@@ -29,6 +29,9 @@ from .atomic_fact import AtomicFactDailyFrontmatter as AtomicFactDailyFrontmatte
 from .episode import EpisodeDailyFrontmatter as EpisodeDailyFrontmatter
 from .foresight import ForesightDailyFrontmatter as ForesightDailyFrontmatter
 from .profile import UserProfileFrontmatter as UserProfileFrontmatter
+from .v2_memory import V2CaseFrontmatter as V2CaseFrontmatter
+from .v2_memory import V2EpisodeFrontmatter as V2EpisodeFrontmatter
+from .v2_memory import V2PlaybookFrontmatter as V2PlaybookFrontmatter
 
 __all__ = [
     "AgentCaseDailyFrontmatter",
@@ -37,4 +40,7 @@ __all__ = [
     "EpisodeDailyFrontmatter",
     "ForesightDailyFrontmatter",
     "UserProfileFrontmatter",
+    "V2CaseFrontmatter",
+    "V2EpisodeFrontmatter",
+    "V2PlaybookFrontmatter",
 ]

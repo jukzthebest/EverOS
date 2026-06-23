@@ -34,6 +34,9 @@ from .mds import AtomicFactDailyFrontmatter as AtomicFactDailyFrontmatter
 from .mds import EpisodeDailyFrontmatter as EpisodeDailyFrontmatter
 from .mds import ForesightDailyFrontmatter as ForesightDailyFrontmatter
 from .mds import UserProfileFrontmatter as UserProfileFrontmatter
+from .mds import V2CaseFrontmatter as V2CaseFrontmatter
+from .mds import V2EpisodeFrontmatter as V2EpisodeFrontmatter
+from .mds import V2PlaybookFrontmatter as V2PlaybookFrontmatter
 from .readers import AgentCaseReader as AgentCaseReader
 from .readers import AgentSkillReader as AgentSkillReader
 from .readers import AtomicFactReader as AtomicFactReader
@@ -70,4 +73,7 @@ __all__ = [
     "ProfileReader",
     "ProfileWriter",
     "UserProfileFrontmatter",
+    "V2CaseFrontmatter",
+    "V2EpisodeFrontmatter",
+    "V2PlaybookFrontmatter",
 ]

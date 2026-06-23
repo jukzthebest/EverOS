@@ -17,6 +17,9 @@ from .base import HandlerDeps as HandlerDeps
 from .episode import EpisodeHandler as EpisodeHandler
 from .foresight import ForesightHandler as ForesightHandler
 from .user_profile import UserProfileHandler as UserProfileHandler
+from .v2_memory import V2CaseHandler as V2CaseHandler
+from .v2_memory import V2EpisodeHandler as V2EpisodeHandler
+from .v2_memory import V2PlaybookHandler as V2PlaybookHandler
 
 __all__ = [
     "AgentCaseHandler",
@@ -27,4 +30,7 @@ __all__ = [
     "Handler",
     "HandlerDeps",
     "UserProfileHandler",
+    "V2CaseHandler",
+    "V2EpisodeHandler",
+    "V2PlaybookHandler",
 ]

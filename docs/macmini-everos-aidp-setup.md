@@ -7,7 +7,7 @@
 推荐方案：
 
 - EverOS repo：使用当前 fork。
-- 记忆根目录：`~/Obsidian/EverOS-Memory/everos`。
+- 记忆根目录：`~/Obsidian/EverOS-Memory/everos-v2`。
 - 项目域：复用 `AIDP`，用于做题、标注、错题和解题策略。
 - LLM：优先 `grok_oauth -> codex_oauth -> openai` fallback。
 - Embedding：有便宜 API 就用 DeepInfra/Qwen；没有就先用 `local_hash`。
@@ -50,14 +50,15 @@ setup 会自动写入 `~/.zshrc`，`everos-memory` 自身也会绕过代理访�
 
 `scripts/setup_codex_everos_memory.sh` 会自动完成：
 
-- 创建 `~/Obsidian/EverOS-Memory/everos`。
+- 创建 `~/Obsidian/EverOS-Memory/everos-v2`。
 - 生成 `~/.everos/config.toml`，默认 `extraction_language = "zh"`。
 - 安装 `~/.local/bin/everos-memory`。
 - 写入 localhost 绕代理配置：`NO_PROXY=127.0.0.1,localhost`。
 - 写入 `~/.codex/rules/everos-memory.md`。
 - 在 `~/.codex/AGENTS.md` 中追加 EverOS 短规则。
+- 安装 `~/.codex/hooks/everos-memory-user-prompt.js`。
 - 安装 `~/.codex/hooks/everos-memory-stop.js`。
-- 新建或合并 `~/.codex/hooks.json` 的 Stop hook。
+- 新建或合并 `~/.codex/hooks.json` 的 UserPromptSubmit / Stop hooks。
 
 ## 3. 配置记忆根目录
 
@@ -67,7 +68,7 @@ setup 后检查 `~/.everos/config.toml`。
 
 ```toml
 [memory]
-root = "~/Obsidian/EverOS-Memory/everos"
+root = "~/Obsidian/EverOS-Memory/everos-v2"
 timezone = "Asia/Shanghai"
 
 [llm]
@@ -202,127 +203,17 @@ everos-memory search "<task keywords>" --project AIDP --limit 3
 ```
 ````
 
-## 7. Codex Stop Hook
+## 7. Codex Hooks
 
-setup 会创建 hook。手工检查或修复时使用：
+setup 会从仓库模板安装 hooks。手工修复时使用：
 
 ```bash
 mkdir -p ~/.codex/hooks ~/.codex/log
-cat > ~/.codex/hooks/everos-memory-stop.js <<'EOF'
-#!/usr/bin/env node
-const fs = require("fs");
-const http = require("http");
-const os = require("os");
-const path = require("path");
-const { spawn } = require("child_process");
-
-const BASE_URL = process.env.EVEROS_MEMORY_BASE_URL || "http://127.0.0.1:8000";
-const REPO = path.join(os.homedir(), "Documents/daily/everos-codex-oauth-poc");
-const SESSIONS_DIR = path.join(os.homedir(), ".codex", "sessions");
-const LOG = path.join(os.homedir(), ".codex", "log", "everos-memory-hook.log");
-const LOCK = path.join(os.tmpdir(), "everos-memory-import.lock");
-
-let chunks = [];
-let done = false;
-process.stdin.on("data", (chunk) => chunks.push(chunk));
-process.stdin.on("end", run);
-setTimeout(run, 350);
-
-function run() {
-  if (done) return;
-  done = true;
-  const payload = readPayload();
-  const currentSessionId = payload.session_id || payload.sessionId || "";
-  checkApi((ready) => {
-    if (!ready) process.exit(0);
-    spawnImport(currentSessionId);
-    process.exit(0);
-  });
-}
-
-function readPayload() {
-  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); }
-  catch { return {}; }
-}
-
-function checkApi(callback) {
-  const url = new URL("/api/v1/dashboard/health", BASE_URL);
-  const req = http.get({ hostname: url.hostname, port: url.port || 80, path: url.pathname, timeout: 180 }, (res) => {
-    res.resume();
-    callback(res.statusCode >= 200 && res.statusCode < 300);
-  });
-  req.on("error", () => callback(false));
-  req.on("timeout", () => { req.destroy(); callback(false); });
-}
-
-function spawnImport(currentSessionId) {
-  if (!takeLock()) return;
-  fs.mkdirSync(path.dirname(LOG), { recursive: true });
-  const out = fs.openSync(LOG, "a");
-  const err = fs.openSync(LOG, "a");
-  const args = [
-    "run", "everos", "import", "codex",
-    "--sessions-dir", SESSIONS_DIR,
-    "--base-url", BASE_URL,
-    "--newest",
-    "--limit", "1",
-    "--chunk-messages", "40",
-    "--min-age-seconds", "180",
-    "--skip-existing",
-    "--skip-low-value",
-    "--continue-on-error",
-  ];
-  if (currentSessionId) args.push("--exclude-session-id", currentSessionId);
-  const command = `uv ${args.map(shellQuote).join(" ")}; status=$?; rm -f ${shellQuote(LOCK)}; exit $status`;
-  const child = spawn("/bin/sh", ["-c", command], {
-    cwd: REPO,
-    detached: true,
-    stdio: ["ignore", out, err],
-    env: {
-      ...process.env,
-      NO_PROXY: appendNoProxy(process.env.NO_PROXY || process.env.no_proxy || ""),
-      no_proxy: appendNoProxy(process.env.NO_PROXY || process.env.no_proxy || ""),
-      EVEROS_MEMORY_IMPORT_HOOK: "1",
-    },
-  });
-  child.unref();
-}
-
-function appendNoProxy(value) {
-  const required = ["127.0.0.1", "localhost"];
-  const parts = String(value || "")
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  for (const item of required) {
-    if (!parts.includes(item)) parts.push(item);
-  }
-  return parts.join(",");
-}
-
-function takeLock() {
-  try {
-    const fd = fs.openSync(LOCK, "wx");
-    fs.writeFileSync(fd, `${process.pid}\n${new Date().toISOString()}\n`);
-    fs.closeSync(fd);
-    return true;
-  } catch {
-    try {
-      const stat = fs.statSync(LOCK);
-      if (Date.now() - stat.mtimeMs > 60 * 60 * 1000) {
-        fs.unlinkSync(LOCK);
-        return takeLock();
-      }
-    } catch {}
-    return false;
-  }
-}
-
-function shellQuote(value) {
-  return `'${String(value).replace(/'/g, `'\\''`)}'`;
-}
-EOF
-chmod +x ~/.codex/hooks/everos-memory-stop.js
+cp templates/codex/hooks/everos-memory-user-prompt.js ~/.codex/hooks/everos-memory-user-prompt.js
+cp templates/codex/hooks/everos-memory-stop.js ~/.codex/hooks/everos-memory-stop.js
+chmod +x ~/.codex/hooks/everos-memory-user-prompt.js ~/.codex/hooks/everos-memory-stop.js
+node --check ~/.codex/hooks/everos-memory-user-prompt.js
+node --check ~/.codex/hooks/everos-memory-stop.js
 ```
 
 setup 会自动新建或合并到 `~/.codex/hooks.json`：
@@ -330,6 +221,16 @@ setup 会自动新建或合并到 `~/.codex/hooks.json`：
 ```json
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.codex/hooks/everos-memory-user-prompt.js\""
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -344,7 +245,7 @@ setup 会自动新建或合并到 `~/.codex/hooks.json`：
 }
 ```
 
-如果已有 `hooks.json`，setup 会保留原内容并追加 EverOS Stop hook。
+如果已有 `hooks.json`，setup 会保留原内容并补齐 EverOS 两个 hook。
 
 ## 8. 做题专用记忆约定
 
@@ -387,14 +288,14 @@ setup 会自动新建或合并到 `~/.codex/hooks.json`：
 只同步 Markdown：
 
 ```text
-~/Obsidian/EverOS-Memory/everos/
+~/Obsidian/EverOS-Memory/everos-v2/
 ```
 
 不要同步：
 
 ```text
-~/Obsidian/EverOS-Memory/everos/.index/
-~/Obsidian/EverOS-Memory/everos/.tmp/
+~/Obsidian/EverOS-Memory/everos-v2/.index/
+~/Obsidian/EverOS-Memory/everos-v2/.tmp/
 ```
 
 推荐 `.gitignore`：
@@ -409,27 +310,34 @@ setup 会自动新建或合并到 `~/.codex/hooks.json`：
 
 ```bash
 cd ~/Documents/daily/everos-codex-oauth-poc
-rm -rf ~/Obsidian/EverOS-Memory/everos/.index/lancedb
+rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/lancedb
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade sync
 ```
 
 如果 SQLite 也要重建：
 
 ```bash
-rm -rf ~/Obsidian/EverOS-Memory/everos/.index/sqlite
+rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/sqlite
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos server start --host 127.0.0.1 --port 8000
 ```
 
 ## 10. Session 与 LanceDB 处理逻辑
 
-整体链路：
+读路径：
+
+```text
+UserPromptSubmit hook
+  -> everos-memory search --limit 1
+  -> 高置信命中注入当前请求
+```
+
+写路径：
 
 ```text
 Codex session JSONL
   -> Stop hook
-  -> everos import codex
-  -> EverOS add/flush
-  -> 中文 Markdown 记忆
+  -> everos import codex-v2
+  -> v2 中文 Markdown 记忆
   -> cascade
   -> SQLite + LanceDB
 ```
@@ -446,16 +354,16 @@ Session 处理：
 去重规则：
 
 - 默认开启 `--skip-existing`。
-- 已导入 session 写入 `<memory-root>/codex/.imported_sessions.jsonl`。
-- 补导时先查这个 ledger。
-- 同时扫描已有 Markdown 里的 `session_id`，避免 ledger 丢失后重复导入。
-- 长 session 用 `--chunk-messages 40` 切片，切片 id 形如 `session.part001`，同样参与去重。
+- 已导入 session 写入 `<memory-root>/codex/.system/import-manifest.jsonl`。
+- 补导时按 `project + session_id` 跳过重复 session。
+- 文件名包含日期、可读标题和 session 短 id，避免同标题覆盖。
+- 超大 session 先落到 `codex/inbox/oversized/`，不直接进入正式记忆。
 
 去噪规则：
 
 - 跳过没有用户消息或没有助手回复的 session。
 - 跳过 Codex 注入的元信息，例如 `AGENTS.md instructions`、`environment_context`、内部上下文和 aborted 标记。
-- 默认开启 `--skip-low-value`。
+- 默认启用低价值过滤。
 - 跳过纯确认类低价值 session，例如 `ok`、`好的`、`继续`。
 - 跳过语义字符数少于 24 的极短 session。
 
@@ -464,16 +372,13 @@ Session 处理：
 ```bash
 cd ~/Documents/daily/everos-codex-oauth-poc
 EVEROS_CONFIG_FILE=~/.everos/config.toml \
-uv run everos import codex \
+uv run everos import codex-v2 \
   --sessions-dir ~/.codex/sessions \
-  --base-url http://127.0.0.1:8000 \
   --newest \
   --limit 20 \
-  --chunk-messages 40 \
   --min-age-seconds 180 \
   --skip-existing \
-  --skip-low-value \
-  --continue-on-error
+  --defer-oversized
 ```
 
 LanceDB 处理：
@@ -487,7 +392,7 @@ LanceDB 处理：
 重建 LanceDB：
 
 ```bash
-rm -rf ~/Obsidian/EverOS-Memory/everos/.index/lancedb
+rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/lancedb
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade sync
 ```
 
@@ -553,7 +458,7 @@ http://127.0.0.1:8000/dashboard/
 请按以下目标落地，不要只给建议：
 
 1. 使用 ~/Documents/daily/everos-codex-oauth-poc 作为 EverOS repo。
-2. 使用 ~/Obsidian/EverOS-Memory/everos 作为 memory root。
+2. 使用 ~/Obsidian/EverOS-Memory/everos-v2 作为 memory root。
 3. 执行 bash scripts/setup_codex_everos_memory.sh。
 4. 检查 ~/.everos/config.toml：
    - LLM fallback: grok_oauth -> codex_oauth -> openai
@@ -562,7 +467,7 @@ http://127.0.0.1:8000/dashboard/
 5. 启动 EverOS 本地 API: 127.0.0.1:8000。
 6. 确认 ~/.local/bin/everos-memory 可用。
 7. 确认 ~/.codex/AGENTS.md 只保留短路由；细则放 ~/.codex/rules/everos-memory.md。
-8. 确认 Codex Stop hook 已接入，让稳定 session 异步导入 EverOS。
+8. 确认 Codex UserPromptSubmit / Stop hooks 已接入：前者预召回，后者异步导入稳定 session。
 9. 为做题场景使用 AIDP 项目路由：
    - 相似题
    - 错题

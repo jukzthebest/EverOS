@@ -74,21 +74,23 @@ Fast path:
 - Do not send an intermediate commentary message before the recall. Run the
   single recall silently, then answer in the final response.
 
-## Write Path
+## Hook Path
 
-The Codex Stop hook is registered in:
+The Codex hooks are registered in:
 
 ```text
 /Users/lengxiaochu/.codex/hooks.json
 ```
 
-It runs:
+They run:
 
 ```text
+/Users/lengxiaochu/.codex/hooks/everos-memory-user-prompt.js
 /Users/lengxiaochu/.codex/hooks/everos-memory-stop.js
 ```
 
-The hook:
+The UserPromptSubmit hook injects one high-confidence hit before the model
+starts. The Stop hook:
 
 - checks whether the local EverOS API is reachable;
 - excludes the current session id to avoid partial imports;

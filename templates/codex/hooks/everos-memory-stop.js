@@ -11,6 +11,9 @@ const BASE_URL = process.env.EVEROS_MEMORY_BASE_URL || "http://127.0.0.1:8000";
 const REPO =
   process.env.EVEROS_REPO ||
   path.join(os.homedir(), "Documents/daily/everos-codex-oauth-poc");
+const MEMORY_ROOT =
+  process.env.EVEROS_MEMORY_ROOT ||
+  path.join(os.homedir(), "Obsidian", "EverOS-Memory", "everos-v2");
 const SESSIONS_DIR = path.join(os.homedir(), ".codex", "sessions");
 const LOG = path.join(os.homedir(), ".codex", "log", "everos-memory-hook.log");
 const LOCK = path.join(os.tmpdir(), "everos-memory-import.lock");
@@ -72,24 +75,22 @@ function spawnImport(currentSessionId) {
     "run",
     "everos",
     "import",
-    "codex",
+    "codex-v2",
     "--sessions-dir",
     SESSIONS_DIR,
-    "--base-url",
-    BASE_URL,
+    "--output-root",
+    MEMORY_ROOT,
     "--newest",
     "--limit",
     "1",
-    "--chunk-messages",
-    "40",
     "--min-age-seconds",
     "180",
     "--skip-existing",
-    "--skip-low-value",
-    "--continue-on-error",
   ];
   if (currentSessionId) args.push("--exclude-session-id", currentSessionId);
-  const command = `uv ${args.map(shellQuote).join(" ")}; status=$?; rm -f ${shellQuote(LOCK)}; exit $status`;
+  const importCmd = `uv ${args.map(shellQuote).join(" ")}`;
+  const cascadeCmd = "uv run everos cascade sync";
+  const command = `${importCmd}; status=$?; if [ "$status" -eq 0 ]; then ${cascadeCmd}; status=$?; fi; rm -f ${shellQuote(LOCK)}; exit $status`;
   const child = spawn("/bin/sh", ["-c", command], {
     cwd: REPO,
     detached: true,
@@ -98,6 +99,7 @@ function spawnImport(currentSessionId) {
       ...process.env,
       NO_PROXY: appendNoProxy(process.env.NO_PROXY || process.env.no_proxy || ""),
       no_proxy: appendNoProxy(process.env.NO_PROXY || process.env.no_proxy || ""),
+      EVEROS_MEMORY__ROOT: MEMORY_ROOT,
       EVEROS_MEMORY_IMPORT_HOOK: "1",
     },
   });
