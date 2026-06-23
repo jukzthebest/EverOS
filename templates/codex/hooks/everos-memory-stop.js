@@ -129,7 +129,8 @@ function spawnImport(currentSessionId, detectedMemoryRoot) {
   ];
   if (currentSessionId) stableArgs.push("--exclude-session-id", currentSessionId);
   commands.push(`uv ${stableArgs.map(shellQuote).join(" ")}`);
-  const importCmd = commands.join("; status=$?; if [ \"$status\" -ne 0 ]; then exit $status; fi; ");
+  const envCmd = envBootstrapCommand(repo);
+  const importCmd = `${envCmd}${commands.join("; status=$?; if [ \"$status\" -ne 0 ]; then exit $status; fi; ")}`;
   const cascadeCmd = "uv run everos cascade sync";
   const command = `${importCmd}; status=$?; if [ "$status" -eq 0 ]; then ${cascadeCmd}; status=$?; fi; rm -f ${shellQuote(LOCK)}; exit $status`;
   const child = spawn("/bin/sh", ["-c", command], {
@@ -145,6 +146,23 @@ function spawnImport(currentSessionId, detectedMemoryRoot) {
     },
   });
   child.unref();
+}
+
+function envBootstrapCommand(repo) {
+  const files = [
+    path.join(os.homedir(), ".everos", ".env"),
+    path.join(os.homedir(), ".config", "everos", ".env"),
+    path.join(repo, ".env"),
+  ];
+  const existing = files.filter((file) => {
+    try {
+      return fs.statSync(file).isFile();
+    } catch {
+      return false;
+    }
+  });
+  if (!existing.length) return "";
+  return `set -a; ${existing.map((file) => `. ${shellQuote(file)}`).join("; ")}; set +a; `;
 }
 
 function findCurrentSessionFile(sessionId) {
