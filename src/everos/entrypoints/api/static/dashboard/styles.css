@@ -189,6 +189,8 @@ nav {
   width: 100%;
   max-width: 1440px;
   min-width: 0;
+  height: 100vh;
+  overflow: auto;
   padding: 24px;
 }
 
@@ -199,6 +201,7 @@ nav {
 .view.active {
   display: grid;
   gap: 16px;
+  min-height: 0;
 }
 
 .page-header {
@@ -452,11 +455,14 @@ pre {
 }
 
 .files-layout {
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: clamp(280px, 28vw, 420px) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
 }
 
 .tree {
   padding: 8px;
+  min-height: 0;
 }
 
 .tree ul {
@@ -474,6 +480,7 @@ pre {
   min-height: 28px;
   color: #3f3f46;
   font-size: 12px;
+  min-width: 0;
 }
 
 .tree summary {
@@ -485,6 +492,17 @@ pre {
   padding: 6px 8px;
   cursor: pointer;
   list-style: none;
+}
+
+.tree button,
+.tree summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree summary {
+  min-width: 0;
 }
 
 .tree summary::-webkit-details-marker {
@@ -520,6 +538,8 @@ pre {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .editor-head,
@@ -532,11 +552,15 @@ pre {
 .editor-head {
   min-height: 34px;
   justify-content: space-between;
+  min-width: 0;
 }
 
 #activeFile {
   color: var(--muted);
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
 }
 
@@ -549,8 +573,9 @@ pre {
 
 textarea {
   width: 100%;
-  min-height: 520px;
-  resize: vertical;
+  height: 100%;
+  min-height: 0;
+  resize: none;
   padding: 12px;
   line-height: 1.55;
   font-family:
@@ -560,7 +585,8 @@ textarea {
 }
 
 .markdown-preview {
-  min-height: 520px;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
   padding: 18px;
   border: 1px solid var(--line);
@@ -569,6 +595,12 @@ textarea {
   color: var(--text);
   font-size: 13px;
   line-height: 1.65;
+}
+
+#files.view.active {
+  height: calc(100vh - 48px);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .markdown-preview h1,
