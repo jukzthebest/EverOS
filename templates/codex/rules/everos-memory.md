@@ -37,6 +37,10 @@ Output contract:
 - Recall should be default-on for non-trivial user prompts. Do not gate recall
   on a Chinese/English keyword allowlist; use keywords only for ranking or
   candidate filtering.
+- Do not maintain hard-coded bilingual synonym dictionaries in hooks. Cross-
+  language recall belongs in embedding / hybrid retrieval / rerank; hooks may
+  only apply generic guards such as explicit identifier consistency, stable
+  memory type preference, and score thresholds.
 - For direct command/template lookups, lead with the command or concrete
   answer. Add at most one short source/confidence line after the answer.
 - Do not run ad-hoc `rg` over `MEMORY.md` before or after `everos-memory`

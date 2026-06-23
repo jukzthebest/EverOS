@@ -10,28 +10,11 @@ const LOG = path.join(os.homedir(), ".codex", "log", "everos-memory-prompt-hook.
 const COMMAND_TIMEOUT_MS = 800;
 const MAX_PROMPT_CHARS = Number(process.env.EVEROS_MEMORY_MAX_PROMPT_CHARS || 1200);
 const MAX_CONTEXT_CHARS = 1800;
+const MIN_STABLE_HIT_SCORE = Number(process.env.EVEROS_MEMORY_MIN_STABLE_HIT_SCORE || 4);
+const MIN_EPISODE_HIT_SCORE = Number(process.env.EVEROS_MEMORY_MIN_EPISODE_HIT_SCORE || 12);
 const DEFAULT_PROJECT = process.env.EVEROS_MEMORY_PROJECT || "auto";
 const PROJECT_RULES = parseProjectRules(process.env.EVEROS_CODEX_PROJECT_RULES || "");
-const ACTION_GROUPS = [
-  ["deploy", "deployment", "部署"],
-  ["login", "log in", "登录", "登陆"],
-  ["connect", "connection", "连接", "链接", "连库"],
-  ["command", "cmd", "命令", "模板"],
-  ["config", "configuration", "配置"],
-  ["path", "路径"],
-  ["fix", "repair", "修复"],
-  ["migrate", "migration", "迁移"],
-  ["export", "dump", "导出"],
-  ["import", "restore", "导入"],
-  ["build", "compile", "构建", "编译"],
-  ["package", "打包"],
-  ["install", "setup", "安装"],
-  ["start", "launch", "启动"],
-  ["rollback", "回滚"],
-  ["sync", "同步"],
-  ["search", "retrieve", "recall", "检索", "召回"],
-].map((group) => group.map((term) => term.toLowerCase()));
-const EXTRA_ACTION_TERMS = splitTerms(process.env.EVEROS_MEMORY_ACTION_TERMS || "");
+const STABLE_KINDS = new Set(["agent_skill", "skill", "playbook", "agent_playbook"]);
 
 let chunks = [];
 let done = false;
@@ -55,7 +38,7 @@ function run() {
   const query = buildQuery(prompt, project);
   const result = spawnSync(
     "everos-memory",
-    ["search", query, "--project", project, "--limit", "3", "--json"],
+    ["search", query, "--project", project, "--limit", "5", "--json"],
     {
       encoding: "utf8",
       timeout: COMMAND_TIMEOUT_MS,
@@ -82,9 +65,7 @@ function run() {
     return quiet("json_failed", { project, error: error.message });
   }
 
-  const hit = Array.isArray(hits)
-    ? hits.find((candidate) => isUsefulHit(candidate, prompt))
-    : null;
+  const hit = Array.isArray(hits) ? selectUsefulHit(hits, prompt) : null;
   if (!hit || !isUsefulHit(hit, prompt)) {
     return quiet("no_useful_hit", {
       project,
@@ -240,22 +221,10 @@ function splitTerms(value) {
 
 function isUsefulHit(hit, prompt) {
   const score = Number(hit.score || 0);
+  if (score < minScoreForKind(hit.kind)) return false;
   const text = `${hit.title || ""}\n${hit.body || ""}`.toLowerCase();
   const identifiers = explicitIdentifiers(prompt);
   if (identifiers.length && !identifiers.some((identifier) => text.includes(identifier))) {
-    return false;
-  }
-  const actionGroups = matchingActionGroups(prompt);
-  if (actionGroups.length && !actionGroups.some((group) => group.some((term) => text.includes(term)))) {
-    return false;
-  }
-  const extraActionTerms = EXTRA_ACTION_TERMS.filter((term) =>
-    prompt.toLowerCase().includes(term.toLowerCase())
-  );
-  if (
-    extraActionTerms.length &&
-    !extraActionTerms.some((term) => text.includes(term.toLowerCase()))
-  ) {
     return false;
   }
   if (score >= 8) return true;
@@ -267,9 +236,17 @@ function isUsefulHit(hit, prompt) {
   return score >= 4 && overlaps >= 1;
 }
 
-function matchingActionGroups(prompt) {
-  const lowered = prompt.toLowerCase();
-  return ACTION_GROUPS.filter((group) => group.some((term) => lowered.includes(term)));
+function selectUsefulHit(hits, prompt) {
+  const useful = hits.filter((hit) => isUsefulHit(hit, prompt));
+  return useful.find((hit) => isStableKind(hit.kind)) || useful[0] || null;
+}
+
+function isStableKind(kind) {
+  return STABLE_KINDS.has(String(kind || "").toLowerCase());
+}
+
+function minScoreForKind(kind) {
+  return isStableKind(kind) ? MIN_STABLE_HIT_SCORE : MIN_EPISODE_HIT_SCORE;
 }
 
 function explicitIdentifiers(prompt) {
