@@ -155,9 +155,16 @@ def cmd_import_codex(args: argparse.Namespace) -> int:
 
 
 def resolve_projects(value: str) -> tuple[str, ...]:
-    if value in {"", "auto", "all", "*"}:
+    normalized = value.strip()
+    lowered = normalized.lower()
+    if lowered in {"", "auto", "all", "*"}:
         return DEFAULT_PROJECTS
-    return tuple(part.strip() for part in value.split(",") if part.strip())
+    canonical = {project.lower(): project for project in DEFAULT_PROJECTS}
+    return tuple(
+        canonical.get(part.strip().lower(), part.strip())
+        for part in normalized.split(",")
+        if part.strip()
+    )
 
 
 def search_scope(
