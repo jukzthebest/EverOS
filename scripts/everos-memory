@@ -134,6 +134,7 @@ def cmd_search(args: argparse.Namespace) -> int:
                 print(f"warning: {exc}", file=sys.stderr)
     hits = filter_precise_identifier_hits(args.query, hits)
     hits = filter_direct_lookup_hits(args.query, hits)
+    hits = filter_required_ascii_terms(args.query, hits)
     hits.sort(key=lambda hit: boosted_score(hit, args.query), reverse=True)
     hits = hits[:limit]
     if args.json:
@@ -415,6 +416,46 @@ def filter_precise_identifier_hits(query: str, hits: list[Hit]) -> list[Hit]:
         if all(identifier in text for identifier in identifiers):
             filtered.append(hit)
     return filtered or hits
+
+
+def filter_required_ascii_terms(query: str, hits: list[Hit]) -> list[Hit]:
+    terms = required_ascii_terms(query)
+    if not terms:
+        return hits
+    return [
+        hit
+        for hit in hits
+        if all(term in searchable_text(hit) for term in terms)
+    ]
+
+
+def required_ascii_terms(query: str) -> list[str]:
+    stopwords = {
+        "and",
+        "for",
+        "from",
+        "how",
+        "into",
+        "please",
+        "that",
+        "the",
+        "this",
+        "what",
+        "when",
+        "where",
+        "why",
+        "with",
+    }
+    terms = []
+    for match in re.finditer(r"[A-Za-z][A-Za-z0-9_./:-]{2,}", query):
+        term = match.group(0).lower()
+        if term not in stopwords:
+            terms.append(term)
+    return list(dict.fromkeys(terms))
+
+
+def searchable_text(hit: Hit) -> str:
+    return f"{hit.title}\n{hit.body}\n{hit.item_id}".lower()
 
 
 def boosted_score(hit: Hit, query: str) -> float:

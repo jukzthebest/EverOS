@@ -78,7 +78,7 @@ async function runSearch(event) {
     app_id: "codex",
     project_id: $("#searchProjectId").value.trim() || "default",
     method: $("#searchMethod").value,
-    top_k: 10,
+    top_k: 20,
   };
 
   const results = $("#searchResults");
@@ -87,7 +87,7 @@ async function runSearch(event) {
 
   try {
     const response = await runSearchRequests(basePayload, ownerType);
-    renderSearchResults(response);
+    renderSearchResults(response, query);
   } catch (error) {
     results.textContent = error.message;
   }
@@ -134,52 +134,64 @@ function mergeSearchData(chunks) {
   };
 }
 
-function renderSearchResults(data) {
+function renderSearchResults(data, query) {
   const items = [
     ...data.episodes.map((item) => ({
+      kind: "episode",
       title: item.subject || item.summary || item.id,
-      meta: `episode · ${item.session_id} · score ${score(item.score)}`,
+      score: asNumber(item.score),
+      meta: "",
       body: item.episode,
       raw: item,
     })),
     ...data.profiles.map((item) => ({
+      kind: "profile",
       title: item.id,
+      score: null,
       meta: "profile",
       body: JSON.stringify(item.profile_data, null, 2),
       raw: item,
     })),
     ...data.agent_cases.map((item) => ({
+      kind: "case",
       title: item.task_intent || item.id,
-      meta: `case · ${item.session_id} · score ${score(item.score)}`,
+      score: asNumber(item.score),
+      meta: "",
       body: [item.approach, item.key_insight].filter(Boolean).join("\n\n"),
       raw: item,
     })),
     ...data.agent_skills.map((item) => ({
+      kind: "skill",
       title: item.description || item.name || item.id,
-      meta: `skill · confidence ${score(item.confidence)}`,
+      score: asNumber(item.score),
       body: item.content || item.description,
       raw: item,
     })),
     ...data.unprocessed_messages.map((item) => ({
+      kind: "buffer",
       title: `${item.role} · ${item.sender_id}`,
+      score: null,
       meta: `buffer · ${item.session_id}`,
       body: typeof item.content === "string" ? item.content : JSON.stringify(item.content),
       raw: item,
     })),
-  ];
+  ]
+    .filter((item) => item.kind !== "profile" && item.kind !== "buffer");
+
+  const visibleItems = filterAndRankItems(query, items).slice(0, 10);
 
   const results = $("#searchResults");
   results.innerHTML = "";
-  if (items.length === 0) {
+  if (visibleItems.length === 0) {
     results.textContent = "No results.";
     return;
   }
-  for (const item of items) {
+  for (const item of visibleItems) {
     const button = document.createElement("button");
     button.className = "result-item";
     button.innerHTML = `<strong></strong><span></span>`;
     button.querySelector("strong").textContent = item.title;
-    button.querySelector("span").textContent = item.meta;
+    button.querySelector("span").textContent = itemMeta(item, query);
     button.addEventListener("click", () => {
       document
         .querySelectorAll(".result-item")
@@ -198,6 +210,89 @@ function renderSearchResults(data) {
 
 function score(value) {
   return typeof value === "number" ? value.toFixed(3) : "-";
+}
+
+function asNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function itemMeta(item, query) {
+  const parts = [item.kind];
+  if (item.raw?.session_id) parts.push(item.raw.session_id);
+  const rank = boostedScore(item, query);
+  if (rank != null) parts.push(`score ${score(rank)}`);
+  if (item.score != null && rank !== item.score) parts.push(`raw ${score(item.score)}`);
+  return parts.join(" · ");
+}
+
+function filterAndRankItems(query, items) {
+  const terms = requiredAsciiTerms(query);
+  const filtered = terms.length
+    ? items.filter((item) =>
+        terms.every((term) => searchableItemText(item).includes(term)),
+      )
+    : items;
+  return filtered.sort(
+    (left, right) => (boostedScore(right, query) ?? 0) - (boostedScore(left, query) ?? 0),
+  );
+}
+
+function requiredAsciiTerms(query) {
+  const stopwords = new Set([
+    "and",
+    "for",
+    "from",
+    "how",
+    "into",
+    "please",
+    "that",
+    "the",
+    "this",
+    "what",
+    "when",
+    "where",
+    "why",
+    "with",
+  ]);
+  const terms = [];
+  for (const match of query.matchAll(/[A-Za-z][A-Za-z0-9_./:-]{2,}/g)) {
+    const term = match[0].toLowerCase();
+    if (!stopwords.has(term) && !terms.includes(term)) terms.push(term);
+  }
+  return terms;
+}
+
+function searchableItemText(item) {
+  return `${item.title || ""}\n${item.body || ""}\n${item.raw?.id || ""}`.toLowerCase();
+}
+
+function boostedScore(item, query) {
+  const base = item.score ?? 0;
+  const tokens = queryTokens(query);
+  let boost = 0;
+  const title = String(item.title || "").toLowerCase();
+  const body = String(item.body || "").toLowerCase();
+  for (const token of tokens) {
+    if (title.includes(token)) boost += 5;
+    if (body.includes(token)) boost += 0.5;
+  }
+  if (tokens.some((token) => ["连接", "登录", "命令", "mysql"].includes(token))) {
+    if (item.kind === "episode") boost += 1;
+    if (body.includes("mysql ")) boost += 2;
+  }
+  return base + boost;
+}
+
+function queryTokens(query) {
+  const tokens = [];
+  for (const match of query.matchAll(/[A-Za-z0-9_./:-]{2,}|[\u4e00-\u9fff]{2,}/g)) {
+    const token = match[0].toLowerCase();
+    tokens.push(token);
+    if (token.includes("数据库")) tokens.push("mysql");
+    if (token.includes("登录") || token.includes("连接")) tokens.push("连接", "mysql");
+    if (token.includes("命令")) tokens.push("命令");
+  }
+  return [...new Set(tokens)];
 }
 
 function syncOwnerId() {
