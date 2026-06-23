@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MEMORY_ROOT="${EVEROS_MEMORY_ROOT:-$HOME/Obsidian/EverOS-Memory/everos-v2}"
+MEMORY_ROOT="${EVEROS_MEMORY_ROOT:-$HOME/Obsidian/EverOS-Memory/everos}"
 CONFIG_FILE="${EVEROS_CONFIG_FILE:-$HOME/.everos/config.toml}"
 BASE_URL="${EVEROS_MEMORY_BASE_URL:-http://127.0.0.1:8000}"
 LAUNCH_AGENT_LABEL="com.lengxiaochu.everos-memory"

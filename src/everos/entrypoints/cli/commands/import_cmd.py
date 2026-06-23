@@ -311,7 +311,7 @@ def import_codex(
             typer.echo(f"completed with {len(failed)} failed session(s)", err=True)
 
 
-@app.command("codex-v2")
+@app.command("codex-structured")
 def import_codex_v2(
     sessions_dir: Annotated[
         Path,
@@ -319,8 +319,8 @@ def import_codex_v2(
     ] = _DEFAULT_CODEX_SESSIONS_DIR,
     output_root: Annotated[
         Path,
-        typer.Option("--output-root", help="V2 memory root to write."),
-    ] = Path("~/Obsidian/EverOS-Memory/everos-v2"),
+        typer.Option("--output-root", help="Structured memory root to write."),
+    ] = Path("~/Obsidian/EverOS-Memory/everos"),
     user_id: Annotated[str, typer.Option("--user-id")] = "lengxiaochu",
     agent_id: Annotated[str, typer.Option("--agent-id")] = "codex",
     app_id: Annotated[str, typer.Option("--app-id")] = "codex",
@@ -371,7 +371,7 @@ def import_codex_v2(
         typer.Option("--replace/--append", help="Replace output_root before writing."),
     ] = False,
 ) -> None:
-    """Import Codex sessions into the v2 human-readable markdown layout.
+    """Import Codex sessions into the canonical structured markdown layout.
 
     This command writes the source-of-truth Markdown directly. SQLite and
     LanceDB remain derived and can be rebuilt with ``everos cascade sync``.
@@ -445,7 +445,7 @@ def import_codex_v2(
         selected = selected[:limit]
 
     typer.echo(
-        "v2 import plan: "
+        "structured import plan: "
         f"selected={len(selected)} oversized={len(oversized)} "
         f"low_value={skipped_low_value} duplicate={skipped_duplicate} root={root}"
     )
@@ -461,7 +461,7 @@ def import_codex_v2(
         if backup_existing:
             backup = root.parent / f"{root.name}-backup-{_timestamp_slug()}"
             shutil.move(str(root), str(backup))
-            typer.echo(f"backed up existing v2 root: {backup}")
+            typer.echo(f"backed up existing structured root: {backup}")
         else:
             shutil.rmtree(root)
     _ensure_v2_root(root)
@@ -486,7 +486,10 @@ def import_codex_v2(
         skipped_low_value=skipped_low_value,
         skipped_duplicate=skipped_duplicate,
     )
-    typer.echo(f"v2 import complete: imported={imported}, oversized={len(oversized)}")
+    typer.echo(
+        f"structured import complete: imported={imported}, "
+        f"oversized={len(oversized)}"
+    )
 
 
 def _iter_codex_sessions(
@@ -707,7 +710,7 @@ def _ensure_v2_root(root: Path) -> None:
                 {
                     "schema_version": 2,
                     "created_at": datetime.now(UTC).isoformat(),
-                    "note": "Initial v2 memory layout.",
+                    "note": "Initial structured memory layout.",
                 },
                 ensure_ascii=False,
             )
@@ -918,7 +921,7 @@ def _write_quality_report(
         count, size = by_project.get(session.project_id, (0, 0))
         by_project[session.project_id] = (count + 1, size + session.path.stat().st_size)
     lines = [
-        "# EverOS v2 导入质量报告",
+        "# EverOS 结构化导入质量报告",
         "",
         f"- imported_sessions: {len(selected)}",
         f"- oversized_sessions: {len(oversized)}",

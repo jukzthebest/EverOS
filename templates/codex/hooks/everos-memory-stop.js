@@ -13,7 +13,7 @@ const REPO =
   path.join(os.homedir(), "Documents/daily/everos-codex-oauth-poc");
 const MEMORY_ROOT =
   process.env.EVEROS_MEMORY_ROOT ||
-  path.join(os.homedir(), "Obsidian", "EverOS-Memory", "everos-v2");
+  path.join(os.homedir(), "Obsidian", "EverOS-Memory", "everos");
 const SESSIONS_DIR = path.join(os.homedir(), ".codex", "sessions");
 const LOG = path.join(os.homedir(), ".codex", "log", "everos-memory-hook.log");
 const LOCK = path.join(os.tmpdir(), "everos-memory-import.lock");
@@ -75,7 +75,7 @@ function spawnImport(currentSessionId) {
     "run",
     "everos",
     "import",
-    "codex-v2",
+    "codex-structured",
     "--sessions-dir",
     SESSIONS_DIR,
     "--output-root",

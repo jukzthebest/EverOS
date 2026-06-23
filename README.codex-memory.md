@@ -7,7 +7,7 @@
 - OAuth / fallback LLM：`grok_oauth -> codex_oauth -> openai`。
 - 本地 embedding 兜底：`local_hash`，没有 API key 也能启动和建索引。
 - Dashboard：`http://127.0.0.1:8000/dashboard/`。
-- Codex session 导入：`everos import codex-v2`，直接写 v2 中文 Markdown。
+- Codex session 导入：`everos import codex-structured`，直接写 结构化中文 Markdown。
 - 快速检索 CLI：`scripts/everos-memory`。
 - Codex hooks 模板：提交前预召回，结束后异步导入稳定 session。
 - 一键 setup 脚本：`scripts/setup_codex_everos_memory.sh`。
@@ -27,7 +27,7 @@ bash scripts/setup_codex_everos_memory.sh
 默认记忆根目录：
 
 ```text
-~/Obsidian/EverOS-Memory/everos-v2
+~/Obsidian/EverOS-Memory/everos
 ```
 
 默认配置文件：
@@ -79,20 +79,20 @@ tail -50 ~/.codex/log/everos-memory-hook.log
 4. 同步记忆时只同步 Markdown 本体，不同步索引：
 
 ```text
-~/Obsidian/EverOS-Memory/everos-v2/
+~/Obsidian/EverOS-Memory/everos/
 ```
 
 不要同步：
 
 ```text
-~/Obsidian/EverOS-Memory/everos-v2/.index/
-~/Obsidian/EverOS-Memory/everos-v2/.tmp/
+~/Obsidian/EverOS-Memory/everos/.index/
+~/Obsidian/EverOS-Memory/everos/.tmp/
 ```
 
 5. 新设备同步 Markdown 后，本地重建索引：
 
 ```bash
-rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/lancedb
+rm -rf ~/Obsidian/EverOS-Memory/everos/.index/lancedb
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade sync
 ```
 
@@ -111,8 +111,8 @@ Codex session 的写入链路：
 ```text
 Codex session JSONL
   -> Stop hook
-  -> everos import codex-v2
-  -> v2 中文 Markdown 记忆
+  -> everos import codex-structured
+  -> 结构化中文 Markdown 记忆
   -> cascade
   -> SQLite + LanceDB
 ```
@@ -147,7 +147,7 @@ Stop hook 不导入当前正在写入的 session。它会：
 
 ```bash
 EVEROS_CONFIG_FILE=~/.everos/config.toml \
-uv run everos import codex-v2 \
+uv run everos import codex-structured \
   --sessions-dir ~/.codex/sessions \
   --newest \
   --limit 20 \
@@ -155,6 +155,19 @@ uv run everos import codex-v2 \
   --skip-existing \
   --defer-oversized
 ```
+
+全量 LLM 精炼：
+
+```bash
+EVEROS_CONFIG_FILE=~/.everos/config.toml \
+uv run python scripts/refine_codex_memory.py \
+  --output-root ~/Obsidian/EverOS-Memory/everos \
+  --concurrency 3
+```
+
+精炼脚本会读取 manifest 中的原始 session 路径，重新生成更短的中文
+Markdown，并按 `dedupe_key` 做跨 session 合并。失败前不会覆盖正在使用的
+Markdown；成功后再重建索引。
 
 LanceDB 的处理逻辑：
 
@@ -167,7 +180,7 @@ LanceDB 的处理逻辑：
 重建 LanceDB：
 
 ```bash
-rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/lancedb
+rm -rf ~/Obsidian/EverOS-Memory/everos/.index/lancedb
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade sync
 ```
 

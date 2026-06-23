@@ -132,20 +132,25 @@ def cmd_search(args: argparse.Namespace) -> int:
                 hits.extend(future.result())
             except RuntimeError as exc:
                 print(f"warning: {exc}", file=sys.stderr)
-    hits.sort(
-        key=lambda hit: boosted_score(hit, args.query),
-        reverse=True,
-    )
+    hits = filter_precise_identifier_hits(args.query, hits)
+    hits = filter_direct_lookup_hits(args.query, hits)
+    hits.sort(key=lambda hit: boosted_score(hit, args.query), reverse=True)
     hits = hits[:limit]
     if args.json:
-        print(json.dumps([hit.__dict__ for hit in hits], ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                [hit_json(hit, args.query) for hit in hits],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 0
     print_hits(args.query, hits)
     return 0 if hits else 1
 
 
 def cmd_import_codex(args: argparse.Namespace) -> int:
-    cmd = ["uv", "run", "everos", "import", "codex-v2", *args.extra]
+    cmd = ["uv", "run", "everos", "import", "codex-structured", *args.extra]
     return subprocess.call(cmd, cwd=PROJECT_ROOT)
 
 
@@ -234,24 +239,35 @@ def normalize_hits(data: dict[str, Any]) -> list[Hit]:
                 project_id=str(item.get("project_id") or ""),
                 score=as_score(item.get("score")),
                 title=str(item.get("task_intent") or item.get("id")),
-                body=str(item.get("approach") or item.get("key_insight") or ""),
+                body=join_text(item.get("key_insight"), item.get("approach")),
                 session_id=maybe_str(item.get("session_id")),
                 item_id=str(item.get("id") or ""),
             )
         )
     for item in data.get("agent_skills") or []:
+        skill_name = str(item.get("name") or item.get("id") or "")
+        description = str(item.get("description") or "")
         hits.append(
             Hit(
                 kind="agent_skill",
                 project_id=str(item.get("project_id") or ""),
                 score=as_score(item.get("score")),
-                title=str(item.get("name") or item.get("id")),
-                body=str(item.get("description") or item.get("content") or ""),
+                title=description or skill_name,
+                body=join_text(description, item.get("content")),
                 session_id=None,
                 item_id=str(item.get("id") or ""),
             )
         )
     return hits
+
+
+def join_text(*values: Any) -> str:
+    parts = []
+    for value in values:
+        text = str(value or "").strip()
+        if text and text not in parts:
+            parts.append(text)
+    return "\n".join(parts)
 
 
 def as_score(value: Any) -> float | None:
@@ -272,10 +288,12 @@ def print_hits(query: str, hits: list[Hit]) -> None:
         print("No hits.")
         return
     for index, hit in enumerate(hits, 1):
-        score = "" if hit.score is None else f" score={hit.score:.3f}"
-        confidence = f" confidence={confidence_label(hit.score)}"
+        rank_score = boosted_score(hit, query)
+        score = f" score={rank_score:.3f}"
+        raw = "" if hit.score is None else f" raw={hit.score:.3f}"
+        confidence = f" confidence={confidence_label(rank_score)}"
         print(
-            f"{index}. [{hit.kind}][{hit.project_id}]{score}{confidence} "
+            f"{index}. [{hit.kind}][{hit.project_id}]{score}{raw}{confidence} "
             f"{clip(hit.title, 120)}"
         )
         if hit.body:
@@ -294,6 +312,102 @@ def confidence_label(score: float | None) -> str:
     if score >= 4:
         return "medium"
     return "low"
+
+
+def hit_json(hit: Hit, query: str) -> dict[str, Any]:
+    raw_score = hit.score
+    rank_score = boosted_score(hit, query)
+    return {
+        **hit.__dict__,
+        "score": rank_score,
+        "raw_score": raw_score,
+        "confidence": confidence_label(rank_score),
+    }
+
+
+def filter_direct_lookup_hits(query: str, hits: list[Hit]) -> list[Hit]:
+    """For command lookups, keep command-like hits first and drop vague noise."""
+    if not is_direct_lookup_query(query):
+        return hits
+    identifiers = explicit_identifiers(query)
+    exact_hits = [
+        hit for hit in hits if is_explicit_command_lookup_hit(hit, identifiers)
+    ]
+    if exact_hits:
+        return exact_hits
+    filtered = [
+        hit for hit in hits if is_direct_lookup_hit(hit, identifiers)
+    ]
+    return filtered or hits
+
+
+def is_direct_lookup_query(query: str) -> bool:
+    lowered = query.lower()
+    return bool(
+        re.search(r"[a-z0-9_./:-]{3,}", lowered)
+        and re.search(r"(命令|连接|链接|登录|mysql|ssh|curl|kubectl|docker)", lowered)
+    )
+
+
+def explicit_identifiers(query: str) -> list[str]:
+    return [
+        match.group(0).lower()
+        for match in re.finditer(r"[A-Za-z0-9_./:-]{3,}", query)
+    ]
+
+
+def is_direct_lookup_hit(hit: Hit, identifiers: list[str]) -> bool:
+    text = f"{hit.title}\n{hit.body}".lower()
+    if identifiers and not any(identifier in text for identifier in identifiers):
+        return False
+    command_clues = (
+        "连接命令",
+        "链接命令",
+        "mysql -h",
+        "ssh ",
+        "curl ",
+        "kubectl ",
+        "docker ",
+    )
+    return any(clue in text for clue in command_clues)
+
+
+def is_explicit_command_lookup_hit(hit: Hit, identifiers: list[str]) -> bool:
+    title = hit.title.lower()
+    text = f"{title}\n{hit.body[:1000]}".lower()
+    if identifiers and not any(identifier in text for identifier in identifiers):
+        return False
+    return any(
+        phrase in title
+        or phrase in text[:500]
+        for phrase in (
+            "连接命令",
+            "链接命令",
+            "登录命令",
+            "数据库登录命令",
+            "命令模板",
+            "直接连接",
+        )
+    )
+
+
+def filter_precise_identifier_hits(query: str, hits: list[Hit]) -> list[Hit]:
+    identifiers = [
+        value
+        for value in explicit_identifiers(query)
+        if "_" in value
+        or "." in value
+        or re.search(r"\d", value)
+        or value.endswith((".json", ".yaml", ".yml", ".sql"))
+    ]
+    if not identifiers:
+        return hits
+    filtered = []
+    for hit in hits:
+        text = f"{hit.title}\n{hit.body}".lower()
+        if all(identifier in text for identifier in identifiers):
+            filtered.append(hit)
+    return filtered or hits
 
 
 def boosted_score(hit: Hit, query: str) -> float:

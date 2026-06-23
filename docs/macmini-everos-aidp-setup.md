@@ -7,7 +7,7 @@
 推荐方案：
 
 - EverOS repo：使用当前 fork。
-- 记忆根目录：`~/Obsidian/EverOS-Memory/everos-v2`。
+- 记忆根目录：`~/Obsidian/EverOS-Memory/everos`。
 - 项目域：复用 `AIDP`，用于做题、标注、错题和解题策略。
 - LLM：优先 `grok_oauth -> codex_oauth -> openai` fallback。
 - Embedding：有便宜 API 就用 DeepInfra/Qwen；没有就先用 `local_hash`。
@@ -50,7 +50,7 @@ setup 会自动写入 `~/.zshrc`，`everos-memory` 自身也会绕过代理访�
 
 `scripts/setup_codex_everos_memory.sh` 会自动完成：
 
-- 创建 `~/Obsidian/EverOS-Memory/everos-v2`。
+- 创建 `~/Obsidian/EverOS-Memory/everos`。
 - 生成 `~/.everos/config.toml`，默认 `extraction_language = "zh"`。
 - 安装 `~/.local/bin/everos-memory`。
 - 写入 localhost 绕代理配置：`NO_PROXY=127.0.0.1,localhost`。
@@ -68,7 +68,7 @@ setup 后检查 `~/.everos/config.toml`。
 
 ```toml
 [memory]
-root = "~/Obsidian/EverOS-Memory/everos-v2"
+root = "~/Obsidian/EverOS-Memory/everos"
 timezone = "Asia/Shanghai"
 
 [llm]
@@ -288,14 +288,14 @@ setup 会自动新建或合并到 `~/.codex/hooks.json`：
 只同步 Markdown：
 
 ```text
-~/Obsidian/EverOS-Memory/everos-v2/
+~/Obsidian/EverOS-Memory/everos/
 ```
 
 不要同步：
 
 ```text
-~/Obsidian/EverOS-Memory/everos-v2/.index/
-~/Obsidian/EverOS-Memory/everos-v2/.tmp/
+~/Obsidian/EverOS-Memory/everos/.index/
+~/Obsidian/EverOS-Memory/everos/.tmp/
 ```
 
 推荐 `.gitignore`：
@@ -310,14 +310,14 @@ setup 会自动新建或合并到 `~/.codex/hooks.json`：
 
 ```bash
 cd ~/Documents/daily/everos-codex-oauth-poc
-rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/lancedb
+rm -rf ~/Obsidian/EverOS-Memory/everos/.index/lancedb
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade sync
 ```
 
 如果 SQLite 也要重建：
 
 ```bash
-rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/sqlite
+rm -rf ~/Obsidian/EverOS-Memory/everos/.index/sqlite
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos server start --host 127.0.0.1 --port 8000
 ```
 
@@ -336,8 +336,8 @@ UserPromptSubmit hook
 ```text
 Codex session JSONL
   -> Stop hook
-  -> everos import codex-v2
-  -> v2 中文 Markdown 记忆
+  -> everos import codex-structured
+  -> 结构化中文 Markdown 记忆
   -> cascade
   -> SQLite + LanceDB
 ```
@@ -372,13 +372,30 @@ Session 处理：
 ```bash
 cd ~/Documents/daily/everos-codex-oauth-poc
 EVEROS_CONFIG_FILE=~/.everos/config.toml \
-uv run everos import codex-v2 \
+uv run everos import codex-structured \
   --sessions-dir ~/.codex/sessions \
   --newest \
   --limit 20 \
   --min-age-seconds 180 \
   --skip-existing \
   --defer-oversized
+```
+
+全量 LLM 精炼：
+
+```bash
+cd ~/Documents/daily/everos-codex-oauth-poc
+EVEROS_CONFIG_FILE=~/.everos/config.toml \
+uv run python scripts/refine_codex_memory.py \
+  --output-root ~/Obsidian/EverOS-Memory/everos \
+  --concurrency 3
+```
+
+精炼完成后重建索引：
+
+```bash
+rm -rf ~/Obsidian/EverOS-Memory/everos/.index/lancedb
+EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade sync
 ```
 
 LanceDB 处理：
@@ -392,7 +409,7 @@ LanceDB 处理：
 重建 LanceDB：
 
 ```bash
-rm -rf ~/Obsidian/EverOS-Memory/everos-v2/.index/lancedb
+rm -rf ~/Obsidian/EverOS-Memory/everos/.index/lancedb
 EVEROS_CONFIG_FILE=~/.everos/config.toml uv run everos cascade sync
 ```
 
@@ -458,7 +475,7 @@ http://127.0.0.1:8000/dashboard/
 请按以下目标落地，不要只给建议：
 
 1. 使用 ~/Documents/daily/everos-codex-oauth-poc 作为 EverOS repo。
-2. 使用 ~/Obsidian/EverOS-Memory/everos-v2 作为 memory root。
+2. 使用 ~/Obsidian/EverOS-Memory/everos 作为 memory root。
 3. 执行 bash scripts/setup_codex_everos_memory.sh。
 4. 检查 ~/.everos/config.toml：
    - LLM fallback: grok_oauth -> codex_oauth -> openai

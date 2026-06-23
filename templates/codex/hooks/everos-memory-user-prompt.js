@@ -257,7 +257,10 @@ function log(event, data) {
 }
 
 function clip(text, limit) {
-  const compact = text.replace(/\s+/g, " ").trim();
+  const compact = text
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   if (compact.length <= limit) return compact;
   return `${compact.slice(0, limit - 1).trimEnd()}…`;
 }
