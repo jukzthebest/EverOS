@@ -540,6 +540,13 @@ pre {
   font-size: 12px;
 }
 
+.editor-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
 textarea {
   width: 100%;
   min-height: 520px;
@@ -550,6 +557,75 @@ textarea {
     "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, Consolas,
     "Liberation Mono", monospace;
   font-size: 12px;
+}
+
+.markdown-preview {
+  min-height: 520px;
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4 {
+  margin: 18px 0 8px;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.markdown-preview h1 {
+  margin-top: 0;
+  font-size: 22px;
+}
+
+.markdown-preview h2 {
+  font-size: 17px;
+}
+
+.markdown-preview h3 {
+  font-size: 15px;
+}
+
+.markdown-preview p,
+.markdown-preview ul,
+.markdown-preview ol,
+.markdown-preview pre {
+  margin: 0 0 12px;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  padding-left: 22px;
+}
+
+.markdown-preview code {
+  padding: 2px 4px;
+  border-radius: 5px;
+  background: #f4f4f5;
+  font-family:
+    "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.markdown-preview pre {
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.markdown-preview pre code {
+  padding: 0;
+  background: transparent;
 }
 
 .actions {

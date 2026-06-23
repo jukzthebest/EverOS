@@ -133,9 +133,13 @@
           <section class="panel editor">
             <div class="editor-head">
               <span id="activeFile">No file selected</span>
-              <button id="saveFile" class="command secondary" disabled>Save</button>
+              <div class="editor-actions">
+                <button id="togglePreview" class="command secondary" disabled>Preview</button>
+                <button id="saveFile" class="command secondary" disabled>Save</button>
+              </div>
             </div>
             <textarea id="fileEditor" spellcheck="false"></textarea>
+            <article id="markdownPreview" class="markdown-preview" hidden></article>
           </section>
         </div>
       </section>

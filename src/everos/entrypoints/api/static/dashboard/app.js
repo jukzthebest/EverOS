@@ -1,6 +1,7 @@
 const state = {
   activeFile: null,
   fileDirty: false,
+  previewMode: false,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -362,14 +363,150 @@ async function loadFile(path) {
     const data = await request(`/api/v1/dashboard/file?path=${encodeURIComponent(path)}`);
     state.activeFile = data.path;
     state.fileDirty = false;
+    state.previewMode = false;
     $("#activeFile").textContent = data.path;
     $("#fileEditor").value = data.content;
     $("#saveFile").disabled = !data.editable;
+    updatePreviewState();
   } catch (error) {
     $("#activeFile").textContent = error.message;
     $("#fileEditor").value = "";
     $("#saveFile").disabled = true;
+    state.activeFile = null;
+    state.previewMode = false;
+    updatePreviewState();
   }
+}
+
+function updatePreviewState() {
+  const canPreview = Boolean(state.activeFile?.toLowerCase().endsWith(".md"));
+  if (!canPreview) state.previewMode = false;
+  $("#togglePreview").disabled = !canPreview;
+  $("#togglePreview").textContent = state.previewMode ? "Edit" : "Preview";
+  $("#fileEditor").hidden = state.previewMode;
+  $("#markdownPreview").hidden = !state.previewMode;
+  if (state.previewMode) {
+    $("#markdownPreview").innerHTML = renderMarkdown($("#fileEditor").value);
+  } else {
+    $("#markdownPreview").textContent = "";
+  }
+}
+
+function togglePreview() {
+  if ($("#togglePreview").disabled) return;
+  state.previewMode = !state.previewMode;
+  updatePreviewState();
+}
+
+function renderMarkdown(markdown) {
+  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  const html = [];
+  let inCode = false;
+  let codeLines = [];
+  let listType = null;
+  let paragraph = [];
+
+  const closeParagraph = () => {
+    if (!paragraph.length) return;
+    html.push(`<p>${paragraph.map(formatInline).join("<br>")}</p>`);
+    paragraph = [];
+  };
+  const closeList = () => {
+    if (!listType) return;
+    html.push(`</${listType}>`);
+    listType = null;
+  };
+  const closeBlocks = () => {
+    closeParagraph();
+    closeList();
+  };
+
+  for (const line of lines) {
+    const fence = line.match(/^```/);
+    if (fence) {
+      if (inCode) {
+        html.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+        codeLines = [];
+        inCode = false;
+      } else {
+        closeBlocks();
+        inCode = true;
+      }
+      continue;
+    }
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+
+    if (!line.trim()) {
+      closeBlocks();
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      closeBlocks();
+      const level = heading[1].length;
+      html.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+    if (unordered) {
+      closeParagraph();
+      if (listType !== "ul") {
+        closeList();
+        html.push("<ul>");
+        listType = "ul";
+      }
+      html.push(`<li>${formatInline(unordered[1])}</li>`);
+      continue;
+    }
+
+    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (ordered) {
+      closeParagraph();
+      if (listType !== "ol") {
+        closeList();
+        html.push("<ol>");
+        listType = "ol";
+      }
+      html.push(`<li>${formatInline(ordered[1])}</li>`);
+      continue;
+    }
+
+    closeList();
+    paragraph.push(line.trim());
+  }
+
+  if (inCode) {
+    html.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+  }
+  closeBlocks();
+  return html.join("\n");
+}
+
+function formatInline(text) {
+  const parts = String(text).split(/(`[^`]+`)/g);
+  return parts
+    .map((part) => {
+      if (part.startsWith("`") && part.endsWith("`")) {
+        return `<code>${escapeHtml(part.slice(1, -1))}</code>`;
+      }
+      return escapeHtml(part)
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    })
+    .join("");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 async function saveFile() {
@@ -415,8 +552,10 @@ $("#searchOwnerType").addEventListener("change", syncOwnerId);
 $("#searchForm").addEventListener("submit", runSearch);
 $("#refreshTree").addEventListener("click", loadTree);
 $("#saveFile").addEventListener("click", saveFile);
+$("#togglePreview").addEventListener("click", togglePreview);
 $("#fileEditor").addEventListener("input", () => {
   state.fileDirty = true;
+  if (state.previewMode) updatePreviewState();
 });
 $("#runCascadeSync").addEventListener("click", () => runCascade("sync"));
 $("#runCascadeFix").addEventListener("click", () => runCascade("fix"));
