@@ -18,7 +18,8 @@ mkdir -p "$HOME/.everos" "$HOME/.local/bin" "$HOME/.codex/hooks" \
   "$HOME/.codex/rules" "$HOME/.codex/log" "$HOME/Library/LaunchAgents" "$MEMORY_ROOT"
 
 ln -sf "$REPO_DIR/scripts/everos-memory" "$HOME/.local/bin/everos-memory"
-chmod +x "$REPO_DIR/scripts/everos-memory"
+ln -sf "$REPO_DIR/scripts/everos-dashboard" "$HOME/.local/bin/everos-dashboard"
+chmod +x "$REPO_DIR/scripts/everos-memory" "$REPO_DIR/scripts/everos-dashboard"
 
 if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.zshrc" 2>/dev/null; then
   printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshrc"
@@ -198,8 +199,10 @@ echo "Repo: $REPO_DIR"
 echo "Memory root: $MEMORY_ROOT"
 echo "Config: $CONFIG_FILE"
 echo "API: $BASE_URL"
+echo "Dashboard: $BASE_URL/dashboard/"
 echo "LaunchAgent: $LAUNCH_AGENT_FILE"
 echo
 echo "Next:"
 echo "  cd '$REPO_DIR'"
+echo "  everos-dashboard"
 echo "  everos-memory doctor"

@@ -41,6 +41,26 @@ bash scripts/setup_codex_everos_memory.sh
 `scripts/setup_codex_everos_memory.sh` 会自动安装并启动 launchd 服务：
 `~/Library/LaunchAgents/com.lengxiaochu.everos-memory.plist`。
 
+Dashboard 固定挂在本地 EverOS API 上：
+
+```text
+http://127.0.0.1:8000/dashboard/
+```
+
+一键启动并打开 Dashboard：
+
+```bash
+everos-dashboard
+```
+
+常用维护命令：
+
+```bash
+everos-dashboard status
+everos-dashboard restart
+everos-dashboard logs
+```
+
 验证：
 
 ```bash
@@ -68,7 +88,7 @@ uv run everos server start --host 127.0.0.1 --port 8000 --log-level info
 
 ## 后续步骤
 
-1. 打开 Dashboard：`http://127.0.0.1:8000/dashboard/`。
+1. 打开 Dashboard：`everos-dashboard`。
 2. 在 Codex 中做一次题目测试，让它先查 EverOS AIDP 记忆。
 3. 一个 session 结束后等 3 分钟，再看导入日志：
 

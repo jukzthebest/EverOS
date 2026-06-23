@@ -117,6 +117,26 @@ setup 脚本会自动安装并启动：
 ~/Library/LaunchAgents/com.lengxiaochu.everos-memory.plist
 ```
 
+EverOS API 固定监听：
+
+```text
+http://127.0.0.1:8000
+```
+
+一键启动并打开 Dashboard：
+
+```bash
+everos-dashboard
+```
+
+常用维护命令：
+
+```bash
+everos-dashboard status
+everos-dashboard restart
+everos-dashboard logs
+```
+
 健康检查：
 
 ```bash
@@ -461,8 +481,8 @@ tail -50 ~/.codex/log/everos-memory-hook.log
 
 看 Dashboard：
 
-```text
-http://127.0.0.1:8000/dashboard/
+```bash
+everos-dashboard
 ```
 
 ## 13. 给 Codex 的一键落地 Prompt
@@ -481,7 +501,7 @@ http://127.0.0.1:8000/dashboard/
    - LLM fallback: grok_oauth -> codex_oauth -> openai
    - extraction_language = zh，所有沉淀到 EverOS 的 Markdown 必须中文
    - embedding 先用 local_hash；如果我提供 DeepInfra key，再切 Qwen embedding。
-5. 启动 EverOS 本地 API: 127.0.0.1:8000。
+5. 启动 EverOS 本地 API: 127.0.0.1:8000，并执行 everos-dashboard 打开看板。
 6. 确认 ~/.local/bin/everos-memory 可用。
 7. 确认 ~/.codex/AGENTS.md 只保留短路由；细则放 ~/.codex/rules/everos-memory.md。
 8. 确认 Codex UserPromptSubmit / Stop hooks 已接入：前者预召回，后者异步导入稳定 session。
@@ -496,7 +516,7 @@ http://127.0.0.1:8000/dashboard/
     - everos-memory doctor
     - everos-memory search "二分 边界 条件" --project AIDP --limit 3
     - uv run everos cascade status
-    - 打开 http://127.0.0.1:8000/dashboard/
+    - everos-dashboard
 
 请边改边验证，最终只汇报：
 - 改了哪些文件
